@@ -45,12 +45,14 @@ action returns the subtree; missing args return a hint with an example. Dangerou
 
 ## Install
 
-From the community marketplace:
+From this repository:
 
 ```
-/plugin marketplace add anthropics/claude-plugins-community
-/plugin install dokki@claude-community
+/plugin marketplace add Dokki-lab/dokki-plugin
+/plugin install dokki@dokki-plugin
 ```
+
+Update later with `/plugin marketplace update dokki-plugin`.
 
 On first use, Claude Code connects to `https://dokki.one/mcp/v2`, then runs Dokki's OAuth flow
 in your browser — no API key to paste. During OAuth, choose the Personal and Org workspaces this

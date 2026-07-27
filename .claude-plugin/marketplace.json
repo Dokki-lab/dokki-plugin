@@ -1,0 +1,20 @@
+{
+  "name": "dokki-plugin",
+  "description": "Dokki's own marketplace: install the Dokki plugin for Claude Code straight from the source repository.",
+  "metadata": {
+    "description": "Dokki's own marketplace: install the Dokki plugin for Claude Code straight from the source repository."
+  },
+  "owner": {
+    "name": "Dokki",
+    "email": "support@dokki.one",
+    "url": "https://dokki.one"
+  },
+  "plugins": [
+    {
+      "name": "dokki",
+      "source": "./",
+      "description": "Dokki — agent-native collaboration OS in Claude Code. Where people and agents create knowledge together: create and edit documents, tables, and artifacts, publish public sites, connect 1000+ external integrations, and search across your Personal and Org workspaces.",
+      "strict": true
+    }
+  ]
+}
