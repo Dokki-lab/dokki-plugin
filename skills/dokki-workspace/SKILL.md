@@ -213,7 +213,7 @@ authorizes their own accounts *through* Dokki once, and every skill can then rea
 | Ask/notify workspace members | `message {action:"members"/"send"/"read"}` | workspace_id, args:{content, require_response?} | visible to workspace |
 | Move | `edit {action:"resource.move"}` | resource_id, args:{new_parent_path}, insert_after_id? | safe |
 | Delete (archive) | `edit {action:"resource.delete"}` | resource_id | ⚠️ **confirm** — soft, recoverable |
-| Add tags | `edit {action:"resource.tag"}` | resource_id, args:{tag_names[]} | safe |
+| Add tags | `edit {action:"resource.tag"}` | resource_id, args:{tag_names[], create_missing?} — `create_missing:true` creates any tags that don't exist yet | safe |
 | Remove tags | `edit {action:"resource.untag"}` | resource_id, args:{tag_names[]} | ⚠️ destructive |
 | Share by email | `share {action:"user"}` | resource_id, args:{email, role?} | ⚠️ visible to others |
 | Set public access | `share {action:"public"}` | resource_id, args:{public_access} | ⚠️ **confirm** — visible publicly |
