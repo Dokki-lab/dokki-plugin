@@ -1,7 +1,7 @@
 ---
 name: dokki-workspace
 description: Browse Personal and Org workspaces, search the knowledge base, explore related entities, upload files, message workspace members, connect external integrations (GitHub, Slack, Gmail, Notion, …), and organize resources (move, rename, tag, share, delete). Use for navigation, discovery, coordination, integrations, and workspace hygiene.
-argument-hint: [action] [resource-name-or-id]
+argument-hint: "[action] [resource-name-or-id]"
 allowed-tools: mcp__dokki__find mcp__dokki__read mcp__dokki__create mcp__dokki__edit mcp__dokki__share mcp__dokki__message mcp__dokki__connect mcp__dokki__preview_resource
 ---
 
@@ -263,7 +263,9 @@ For "clean up my workspace":
 - For a normal file resource, pass `workspace_id`, `args:{name, content_base64}`, and optional
   `parent_path`.
 - For an image that will be inserted into a document, set `args:{inline_image: true}`; the returned
-  `node` or `url` can be used with `edit {action:"doc.edit"}` (an `insert` op).
+  `node` or `url` can be used with `edit {action:"doc.edit"}` (an `insert` op). When you already know
+  the destination, add `args:{target_resource_id: "<resource id>"}` — the image is then bound to that
+  resource (you must be able to edit it, and it must live in `workspace_id`).
 - To read a file resource back, `read {action:"file", resource_id}` returns a signed URL by
   default (base64 for small files); pass `args:{format:"base64"}` to force inline bytes.
 

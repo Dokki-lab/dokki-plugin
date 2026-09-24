@@ -111,7 +111,7 @@ one-element list; batch related ops together.
 | Change cell data | `{op:"cells.update", updates:[{rowId, columnId, value}]}` |
 | New field | `{op:"columns.add", columns:[{headerName, type}]}` |
 | Remove field | `{op:"columns.delete", columnIds:[…]}` — ⚠️ **confirm** (deletes all cells in it) |
-| Rename / retype | `{op:"columns.update", columns:[…]}` |
+| Rename / retype | `{op:"columns.update", updates:[{columnId, headerName?, type?}]}` |
 
 `columnId` accepts a **header name** or an internal id — pass the header name for convenience. A
 `columns.delete` op returns `requires_confirmation` + a `confirm_token`; re-send the same call with
@@ -131,7 +131,7 @@ What's changing?
 ├── COLUMNS (schema)
 │   ├── New field          → ops:[{op:"columns.add", columns}]
 │   ├── Remove field       → ops:[{op:"columns.delete", columnIds}]   ⚠️ confirm
-│   └── Rename / retype     → ops:[{op:"columns.update", columns}]
+│   └── Rename / retype     → ops:[{op:"columns.update", updates}]
 │
 └── BOTH
     → put column ops before row ops in the same ops array

@@ -1,7 +1,7 @@
 {
   "name": "dokki",
   "description": "Dokki \u2014 agent-native collaboration OS in Claude Code. Where people and agents create knowledge together: create and edit documents, tables, and artifacts, publish public sites, connect 1000+ external integrations, and search across your Personal and Org workspaces.",
-  "version": "1.1.0",
+  "version": "1.4.1",
   "author": {
     "name": "Dokki",
     "url": "https://dokki.one"
@@ -9,12 +9,5 @@
   "homepage": "https://dokki.one",
   "repository": "https://github.com/Dokki-lab/dokki-plugin",
   "license": "MIT",
-  "keywords": [
-    "dokki",
-    "documents",
-    "collaboration",
-    "publishing",
-    "integrations",
-    "mcp"
-  ]
+  "keywords": ["dokki", "documents", "collaboration", "publishing", "integrations", "mcp"]
 }

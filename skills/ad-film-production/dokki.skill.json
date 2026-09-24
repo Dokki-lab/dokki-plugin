@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "ad-film-production",
+  "display_name": "Ad Film Production",
+  "version": "1.0.0",
+  "entrypoint": "SKILL.md",
+  "protocol": "dokki-ad-film-production@1",
+  "source": {
+    "provider": "github",
+    "repository": "Dokki-lab/Dokki",
+    "path": "skills/ad-film-production"
+  },
+  "execution": "instructions_only",
+  "capabilities": ["document:write", "table:write"],
+  "network": "none",
+  "secrets": []
+}

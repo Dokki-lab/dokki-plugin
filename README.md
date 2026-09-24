@@ -9,24 +9,26 @@
 This plugin bundles:
 
 - **One connector** (`.mcp.json`) — Dokki's hosted MCP, using the **facade** surface:
-  - **`dokki`** (`/mcp/v2`) — **8 high-level tools** (each takes an `action` + `args`) plus
-    `preview_resource`, instead of ~37 flat tools. Fewer tools = the model picks the right one
-    and spends fewer tokens. Publishing and external integrations are built in.
-- **Six skills** that orchestrate those tools into real workflows (routing, decision trees,
+  - **`dokki`** (`/mcp/v2`) — **10 high-level tools** (each takes an `action` + `args`) plus
+    `preview_resource`, instead of ~39 flat tools. Fewer tools = the model picks the right one
+    and spends fewer tokens. Publishing, external integrations, Skills and Agents are built in.
+- **Ten skills** that orchestrate those tools into real workflows (routing, decision trees,
   templates), so natural-language requests map to the right action sequence.
 
 The `dokki` facade tools:
 
 | Tool | What it does |
 |------|--------------|
-| `find` | list workspaces/resources, semantic search, exact grep, knowledge-graph (tag/type/date filters) |
+| `find` | list workspaces/resources/Automations/node types, semantic search, exact grep, knowledge-graph (tag/type/date filters) |
 | `read` | read a document (`view`/`outline`/`edit` modes + pagination), table (`where`/`sort`/`columns`/paging), artifact, file |
-| `create` | workspace, folder, document, table, artifact, file upload |
+| `create` | workspace, folder, document, table, artifact, Dokki App, Automation, file upload |
 | `edit` | rename/move/tag/delete (set an emoji **or Lucide icon**), doc/table/artifact edits (op-arrays, markdown, anchor/section targeting, header-name columns) |
 | `share` | share with a user, or set public access |
 | `message` | a workspace channel for human confirmations & notifications |
+| `skills` | folder-backed Skills: draft, validate, publish, install, bind to an Agent |
 | `publish` | publish/unpublish resources to a public site + custom domains |
 | `connect` | **connect & use 1000+ external integrations** (GitHub, Slack, Gmail, Notion, Google Workspace, Linear, …) through Dokki |
+| `agent` | manage and run your Dokki Agents (roster, teams, schedules); query and cancel delegated runs |
 | `preview_resource` | inline rendered preview of a doc/table/artifact |
 
 The facade is **self-teaching**: call a tool with no `action` to list its actions; a partial
@@ -42,6 +44,10 @@ action returns the subtree; missing args return a hint with an example. Dangerou
 | Table | `/dokki:dokki-table` | Structured data — `create table`, `read table`, `edit table.edit` |
 | Artifact | `/dokki:dokki-artifact` | HTML or JSX artifacts, charts, interactive UI — `create artifact`, `edit artifact.*` |
 | Publish | `/dokki:dokki-publish` | Public sites & custom domains — `publish site/add/remove/domain.*` |
+| Automation | `/dokki:dokki-automation` | Versioned visual workflows — list/read/create/revise/run/history/delete |
+| App | `/dokki:dokki-app` | Multi-page Dokki Apps — Screens, reusable Components, data bound to a Table; validate, release, install |
+| Ad film | `/dokki:ad-film-production` | One-line brief → a generatable shot table: proposition, three-second hook, per-shot video prompts, continuity |
+| Sales call debrief | `/dokki:sales-call-debrief` | Spoken meeting recap → evidence-backed report with account history, stage/BANT, and only the material gaps |
 
 ## Install
 
@@ -83,9 +89,10 @@ The server supports three auth methods:
    ```
 3. **Connector token** — workspace-scoped tokens for embedded/integration use.
 
-The legacy flat surface at `https://dokki.one/api/mcp` (37 tools) and the per-Org endpoint
-`https://dokki.one/api/mcp/org/<orgId>` remain for older clients, but new configurations should
-use the unified `https://dokki.one/mcp/v2` facade.
+`https://dokki.one/api/mcp` remains as a compatibility alias for existing configurations and
+serves the same facade tools as `/mcp/v2`; it is not a separate flat surface. The fixed-Org
+`https://dokki.one/api/mcp/org/<orgId>` endpoint remains for older integrations. New
+configurations should always use `https://dokki.one/mcp/v2`.
 
 ## Local development
 

@@ -10,7 +10,7 @@ This is the **entry skill** for Dokki. When a user describes what they want to d
 
 ## The facade surface
 
-Dokki's MCP exposes **8 facade tools + `preview_resource`**. Every call is `<facade>` with
+Dokki's MCP exposes **10 facade tools + `preview_resource`**. Every call is `<facade>` with
 `{ action: "<action>", <top-level ids>, args: { <payload> } }`. Top-level ids are
 `workspace_id`, `resource_id`, `parent_id`, `insert_after_id`, `site_id`; everything else
 goes in `args`.
@@ -23,8 +23,10 @@ goes in `args`.
 | `edit` | edit doc/table/artifact content + resource ops (rename, icon, move, tag, delete) |
 | `share` | share by email or set public access |
 | `message` | workspace channel: members, send, read |
+| `skills` | folder-backed Skills: draft, validate, publish, install, bind to an Agent |
 | `publish` | published sites, publish/unpublish resources, custom domains |
 | `connect` | connect + call 1000+ external integrations (GitHub, Slack, Gmail, Notion, …) |
+| `agent` | manage and run the user's Dokki Agents (roster, teams, schedules); query and cancel delegated runs |
 
 ### Facade self-teaching conventions
 
@@ -47,7 +49,8 @@ The facades teach themselves — you rarely need to enumerate every arg:
 | Browse, search, organize resources | `dokki-workspace` | `find {action:"workspaces"/"resources"/"search"/"grep"/"related"}`, `create {action:"file"}`, `message {…}`, `edit {action:"resource.move"/"resource.update"/"resource.tag"/"resource.untag"/"resource.delete"}`, `share {…}` |
 | Write/edit rich text documents | `dokki-document` | `create {action:"doc"}`, `read {action:"doc"}`, `edit {action:"doc.edit"/"doc.rewrite"}` |
 | Work with structured tabular data | `dokki-table` | `create {action:"table"}`, `read {action:"table"}`, `edit {action:"table.edit"}` |
-| Build HTML/JSX UI / charts / diagrams | `dokki-artifact` | `create {action:"artifact"}`, `read {action:"artifact"}`, `edit {action:"artifact.update"/"artifact.patch"}` |
+| Build and manage automated workflows | `dokki-automation` | `find {action:"automations"}`, `read {action:"automation"/"automation.runs"}`, `create {action:"automation"}`, `edit {action:"automation.update"/"automation.run"/"automation.delete"}` |
+| Build a UI / chart / diagram as an HTML page | `dokki-artifact` | `create {action:"artifact"}`, `read {action:"artifact"}`, `edit {action:"artifact.update"/"artifact.patch"}` |
 | Publish as a public site | `dokki-publish` | `publish {action:"site"/"site.create"/"site.update"/"add"/"remove"/"domain.*"}` |
 | Connect & use external integrations | `dokki-workspace` (CONNECT mode) | `connect {action:"apps"/"list"/"authorize"/"disconnect"/"tools"/"call"}` |
 
@@ -69,6 +72,7 @@ Match the user's request to these patterns:
 | "Add / edit / rewrite section in doc" | `dokki-document` (edit) |
 | "Create a table of X" / "Track Y in a table" | `dokki-table` (create) |
 | "Add rows / update cells" | `dokki-table` (edit) |
+| "Create / edit / run an automation" / "Build a workflow" | `dokki-automation` |
 | "Make a chart / dashboard / widget" | `dokki-artifact` (create) |
 | "Make this doc / workspace public" | `dokki-publish` |
 | "Connect my GitHub / Slack / Gmail" / "Pull data from <app>" | `dokki-workspace` (CONNECT) |
@@ -117,7 +121,7 @@ These are the high-value flows — chain skills in this order:
 #### 3. Data-Driven Visualization
 **"Make a chart/dashboard of my table data"**
 1. `dokki-table` → `read {action:"table", resource_id}` (use `columns`/`where`/`sort` to pull just what you need)
-2. `dokki-artifact` → `create {action:"artifact", workspace_id, args:{name, source}}` with source that embeds the data inline and renders it with Recharts/Mermaid
+2. `dokki-artifact` → `create {action:"artifact", workspace_id, args:{name, source}}` with a complete HTML document that renders the data (Chart.js/Mermaid via CDN, or `window.dokki.readTable` to stay live)
 3. Optionally place the artifact alongside the table in the same folder (`dokki-workspace` → `edit {action:"resource.move", …}`)
 
 #### 4. Publish Site Bootstrap
