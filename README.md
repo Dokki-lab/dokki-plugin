@@ -9,6 +9,8 @@
 
 # Dokki for Claude Code
 
+**You lead. Agents do the work.** [Dokki](https://dokki.one) brings your team, agents and work into one workspace—from the first goal to shared, editable results.
+
 Bring your Dokki workspace into Claude Code. Search shared knowledge, create and edit documents, build tables and artifacts, and publish results without leaving your agent workflow.
 
 [Install](#install) · [Documentation](https://dokki.one/pub/docs) · [Local development](#local-development) · [MIT license](LICENSE)
@@ -68,7 +70,7 @@ The `dokki` facade tools:
 | `message` | a workspace channel for human confirmations & notifications |
 | `skills` | folder-backed Skills: draft, validate, publish, install, bind to an Agent |
 | `publish` | publish/unpublish resources to a public site + custom domains |
-| `connect` | **connect & use 1000+ external integrations** (GitHub, Slack, Gmail, Notion, Google Workspace, Linear, …) through Dokki |
+| `connect` | **connect & use external integrations** (GitHub, Slack, Gmail, Notion, Google Workspace, Linear, …) through Dokki |
 | `agent` | manage and run your Dokki Agents (roster, teams, schedules); query and cancel delegated runs |
 | `preview_resource` | inline rendered preview of a doc/table/artifact |
 
@@ -80,7 +82,7 @@ action returns the subtree; missing args return a hint with an example. Dangerou
 | Skill | Command | Scope |
 |-------|---------|-------|
 | Entry / router | `/dokki:dokki <intent>` | Interprets intent, routes to the right skill, orchestrates multi-skill workflows |
-| Workspace | `/dokki:dokki-workspace` | Browse, search, organize, coordinate, connect — `find`, `edit resource.*`, `share`, `message`, `connect` (1000+ integrations), upload |
+| Workspace | `/dokki:dokki-workspace` | Browse, search, organize, coordinate, connect — `find`, `edit resource.*`, `share`, `message`, `connect` (external integrations), upload |
 | Document | `/dokki:dokki-document` | Rich-text docs and inline images — `create doc`, `read doc`, `edit doc.edit`/`doc.rewrite` |
 | Table | `/dokki:dokki-table` | Structured data — `create table`, `read table`, `edit table.edit` |
 | Artifact | `/dokki:dokki-artifact` | HTML or JSX artifacts, charts, interactive UI — `create artifact`, `edit artifact.*` |

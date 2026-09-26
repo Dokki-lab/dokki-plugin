@@ -13,7 +13,7 @@
     {
       "name": "dokki",
       "source": "./",
-      "description": "Dokki — agent-native collaboration OS in Claude Code. Where people and agents create knowledge together: create and edit documents, tables, and artifacts, publish public sites, connect 1000+ external integrations, and search across your Personal and Org workspaces.",
+      "description": "Connect Claude Code to Dokki: your team, agents and work in one workspace. Search knowledge, create and edit documents, tables and artifacts, and publish through MCP.",
       "strict": true
     }
   ]
