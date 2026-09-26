@@ -1,18 +1,59 @@
+<p>
+  <a href="https://dokki.one">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Dokki-lab/.github/main/assets/dokki-dark.svg">
+      <img src="https://raw.githubusercontent.com/Dokki-lab/.github/main/assets/dokki-light.svg" alt="Dokki" width="180">
+    </picture>
+  </a>
+</p>
+
 # Dokki for Claude Code
 
-> **[Dokki](https://dokki.one) — agent-native collaboration OS.** The workspace where AI agents
-> work like teammates, reading, writing, reviewing, and publishing alongside people. This plugin
-> brings it into Claude Code — create and edit documents, build tables and artifacts, publish
-> public sites, connect 1000+ external apps, and search everything you've written, without
-> leaving the terminal.
+Bring your Dokki workspace into Claude Code. Search shared knowledge, create and edit documents, build tables and artifacts, and publish results without leaving your agent workflow.
+
+[Install](#install) · [Documentation](https://dokki.one/pub/docs) · [Local development](#local-development) · [MIT license](LICENSE)
+
+You need Claude Code with plugin support and a [Dokki account](https://dokki.one). Hosted usage follows your [Dokki plan](https://dokki.one/plans).
+
+## Install
+
+From this repository:
+
+```
+/plugin marketplace add Dokki-lab/dokki-plugin
+/plugin install dokki@dokki-plugin
+```
+
+Update later with `/plugin marketplace update dokki-plugin`.
+
+On first use, Claude Code connects to `https://dokki.one/mcp/v2`, then runs Dokki's OAuth flow
+in your browser — no API key to paste. During OAuth, choose the Personal and Org workspaces this
+MCP connection can access.
+
+## Your first result
+
+Start with a read-only request:
+
+```text
+/dokki:dokki List my workspaces and show the resources in the workspace I choose.
+```
+
+Then try a small document:
+
+```text
+/dokki:dokki-document Create a Launch brief in my chosen workspace with audience, message and next steps. Return its link.
+```
+
+Open the returned document in Dokki to review and edit it. Publishing is a separate action and should be requested explicitly.
+
+## Included workflows
 
 This plugin bundles:
 
 - **One connector** (`.mcp.json`) — Dokki's hosted MCP, using the **facade** surface:
-  - **`dokki`** (`/mcp/v2`) — **10 high-level tools** (each takes an `action` + `args`) plus
-    `preview_resource`, instead of ~39 flat tools. Fewer tools = the model picks the right one
-    and spends fewer tokens. Publishing, external integrations, Skills and Agents are built in.
-- **Ten skills** that orchestrate those tools into real workflows (routing, decision trees,
+  - **`dokki`** (`/mcp/v2`) — high-level tools (each takes an `action` + `args`) plus
+    `preview_resource`, with discoverable actions. Publishing, external integrations, Skills and Agents are built in.
+- **Focused skills** that orchestrate those tools into real workflows (routing, decision trees,
   templates), so natural-language requests map to the right action sequence.
 
 The `dokki` facade tools:
@@ -48,21 +89,6 @@ action returns the subtree; missing args return a hint with an example. Dangerou
 | App | `/dokki:dokki-app` | Multi-page Dokki Apps — Screens, reusable Components, data bound to a Table; validate, release, install |
 | Ad film | `/dokki:ad-film-production` | One-line brief → a generatable shot table: proposition, three-second hook, per-shot video prompts, continuity |
 | Sales call debrief | `/dokki:sales-call-debrief` | Spoken meeting recap → evidence-backed report with account history, stage/BANT, and only the material gaps |
-
-## Install
-
-From this repository:
-
-```
-/plugin marketplace add Dokki-lab/dokki-plugin
-/plugin install dokki@dokki-plugin
-```
-
-Update later with `/plugin marketplace update dokki-plugin`.
-
-On first use, Claude Code connects to `https://dokki.one/mcp/v2`, then runs Dokki's OAuth flow
-in your browser — no API key to paste. During OAuth, choose the Personal and Org workspaces this
-MCP connection can access.
 
 ## Authentication
 
@@ -120,3 +146,9 @@ endpoint.
 ## License
 
 [MIT](LICENSE)
+
+## Contributing and support
+
+Bug reports, examples and focused improvements are welcome. Read the [contribution guide](https://github.com/Dokki-lab/.github/blob/main/CONTRIBUTING.md), use this repository's Issues for reproducible problems, and follow [private security reporting](https://github.com/Dokki-lab/.github/blob/main/SECURITY.md) for vulnerabilities.
+
+[Dokki](https://dokki.one) · [Documentation](https://dokki.one/pub/docs) · [All projects](https://github.com/Dokki-lab) · [Support](https://github.com/Dokki-lab/.github/blob/main/SUPPORT.md)
