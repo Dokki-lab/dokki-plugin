@@ -5,7 +5,7 @@ allowed-tools: mcp__dokki__find mcp__dokki__read mcp__dokki__create mcp__dokki__
 license: Proprietary
 metadata:
   author: Dokki
-  version: "1.4.8"
+  version: "1.4.11"
   protocol: dokki-automation@1
 ---
 
@@ -29,6 +29,7 @@ Create and maintain versioned Dokki workflows through the MCP facade. A visual w
 | Create a Personal visual workflow | `create {action:"automation", args:{scope_type:"personal", name, description?, workflow, enabled?}}` |
 | Create an Organization visual workflow | `create {action:"automation", organization_id, args:{scope_type:"organization", name, description?, workflow, enabled?}}` |
 | Save a new revision | `edit {action:"automation.update", args:{automation_id, base_revision_id, workflow?, ...}}` |
+| Test one step | `edit {action:"automation.test_node", args:{automation_id, node_id, input?, fixtures?, mock_output?}}` |
 | Run now | `edit {action:"automation.run", args:{automation_id, revision_id?, idempotency_key?, payload?}}` |
 | Delete permanently | `edit {action:"automation.delete", args:{automation_id}}` and repeat with the returned top-level `confirm_token` only after explicit confirmation |
 
@@ -38,7 +39,7 @@ A Workspace is only an explicit target or event-source filter on a Dokki node. F
 
 ## Author `WorkflowGraphV1`
 
-Call `find automation.nodes` before authoring or revising node types you have not just read from the saved graph. Treat its `type`, `default_config`, `required_config_paths`, `runtime_support`, `input_schema` and `output_schema` fields as authoritative; do not reconstruct action-node types from memory. An `output_schema` marked `speculative` is a guess from the node's kind, not an observed shape; `ai.prompt` emits one scalar string with no fields; `action.dokki.read.table`'s output depends on its branch (`args.format` / `args.mode`): csv carries the text in `data`, compact in `markdown`; neither is a `rows` array. A branching node answers `selection_status`, `branches` (in the order the runtime tries them) and a `hint`; pass `node_config` to see one branch's `output_schema`.
+Call `find automation.nodes` before authoring or revising node types you have not just read from the saved graph. Treat its `type`, `default_config`, `required_config_paths`, `runtime_support`, `input_schema` and `output_schema` fields as authoritative; do not reconstruct action-node types from memory. An `output_schema` marked `speculative` is a guess from the node's kind, not an observed shape; `ai.prompt` emits one scalar string with no fields; `action.dokki.read.table`'s output depends on its branch (`args.format` / `args.mode`): `format:'json'` gives typed row objects keyed by column display name (later duplicates gain `(2)`, `(3)` in definition order; ids remain in `columns[]` metadata); bind `rows[].<column>` to check each name. CSV carries text in `data`, and compact carries text in `markdown`. A branching node answers `selection_status`, `branches` (in the order the runtime tries them) and a `hint`; pass `node_config` to see one branch's `output_schema`.
 
 Send the complete graph, not a partial node patch:
 
@@ -70,6 +71,7 @@ The catalog contains:
 - Conditions: `condition.expression` (edges leave from the `true` / `false` handles) and `condition.switch` (one handle per case, `default` when none matched)
 - Flow: `transform.code`, `transform.convert` (one explicit conversion by `operation`: `parse_json`, `parse_csv`, `to_json`, `to_csv`, `markdown_to_html`, `html_to_text`; `input` is a template or binding; strings stay strings, a malformed input fails the node), `flow.parallel` + `flow.join` (branches run concurrently up to `max_concurrency`; a node with two or more inputs must be a join), `flow.for_each`, `flow.while`, `flow.retry`, `flow.catch` (from an upstream error handle), `flow.delay`, `flow.wait_event` (durable suspend, `runtime_support: pause_required`), `flow.call_workflow` (pins a revision), `flow.end`
 - AI: `ai.prompt`, `ai.agent_task` (hidden; requires org policy `automation.agent_task`)
+- Media: `media.image.generate`, `media.video.generate` (one generated file per item, saved in the folder `parent_id` names; batch summary output only, `items`/`succeeded`/`failed`)
 - Human: `human.work_item`, `human.review` (rolling out behind feature flag `automation_human_review_v1`; while off, a write that adds it is refused with `human_review_not_enabled`)
 
 | Node | Runtime contract |
@@ -118,6 +120,10 @@ A config string may contain `{{path}}`. The roots are `input` (the upstream node
 
 Manual, webhook, and listed Dokki Event Fabric triggers can run visual graphs when every node is executable. Pure transforms run in the sandbox, AI nodes use the existing metered AI path, and Dokki action nodes use the same permission, billing, and idempotency boundaries as MCP. Human work items and destructive Dokki actions are executable through durable approval checkpoints. Both scopes may use global discovery actions; every Workspace-targeting action still requires an explicit authorized `workspace_id`.
 
+## Design check per step
+
+For every step added or changed, pass a small made-up sample input to `automation.test_node`; use its observed output as the design snapshot. Reads use your access, writes are dry runs, and AI or paid steps are simulated. If testing is disabled, say verification was skipped. Before saving, compare each downstream use with the upstream snapshot. After `create automation` or `automation.update`, read `design_check`; fix each `found:false` or explain why it stays. Show the person one table in their language: 步驟 | 用了什麼測試資料（一句話） | 產出欄位（顯示名稱） | 被哪些步驟使用 | 怎麼驗證的（實測／模擬／試跑／未測）. Use only step labels and display names. Mark simulated, dry-run and untested steps unverified; never call them tested with real output. Keep ids, dotted paths, JSON and template syntax out of the default reply.
+
 ## Edit with immutable revisions
 
 Always read the Automation immediately before editing. Use the returned `current_revision_id` as `base_revision_id`, then send the complete replacement `workflow` plus only the metadata fields that should change.
@@ -136,7 +142,7 @@ For a Webhook-triggered workflow, call `read automation.webhook` after saving. I
 
 ## Not yet on every environment (checked 2026-09-16)
 
-- **Draft/publish, node tests and the run overlay on the canvas are rolling out behind flags.** Where `authoring_mode` is `draft_v1`, saving does not change the revision runs use until the owner publishes.
+- **Draft/publish and the run overlay on the canvas are rolling out behind flags.** Step testing is available where `automation.node_tests.admission` is enabled; where it is off, report verification skipped. With `authoring_mode` `draft_v1`, saving does not change the revision runs use until the owner publishes.
 
 ## Destructive and external-effect boundaries
 
@@ -149,4 +155,4 @@ For a Webhook-triggered workflow, call `read automation.webhook` after saving. I
 
 ## Return a useful result
 
-Lead with the outcome, then include the Automation name, ID, scope, owner, optional Organization, current revision ID, enabled/draft state, trigger type, node count, targeted Workspaces, and URL. For edits, summarize nodes added, removed, or changed. For blocked execution, name the exact nodes and runtime boundary that prevent enablement.
+Lead with the outcome, then include the Automation name, scope, owner, optional Organization, enabled/draft state, trigger type, node count, targeted Workspaces, and URL. Keep internal ids and raw graph data out of the default reply. For edits, summarize steps added, removed, or changed by label. For blocked execution, name the exact steps and runtime boundary that prevent enablement.

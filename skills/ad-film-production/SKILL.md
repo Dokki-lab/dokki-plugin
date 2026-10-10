@@ -4,7 +4,7 @@ description: Take an ad film from a one-line brief to a shot table that can actu
 license: Proprietary
 metadata:
   author: Dokki
-  version: "1.0.0"
+  version: "1.1.1"
   protocol: dokki-ad-film-production@1
 ---
 
@@ -88,25 +88,44 @@ frame. Two shots joined this way cut together; two shots generated independently
 
 ## 5. Know what the models can and cannot do
 
-This decides which shots are even possible, and what they cost. Verified against
-the live gateway 2026-09-07:
+This decides which shots are even possible, and what they cost. Verified
+against the live gateway 2026-10-03 and 2026-10-07 (migrations
+`20261003115433`, `20261007154939`):
 
-| | first/last frame | multi-reference | length | relative cost |
-|---|:--:|:--:|---|---|
-| MiniMax H3 Max *(default)* | ✓ | **✗** | 5–15s | 1× |
-| MiniMax H3 | ✓ | ✓ | 4–15s | 1× |
-| Seedance 2.5 | ✓ | ✓ | 4–**30s** | 2× |
-| Grok Imagine 1.5 | **✗** | ✓ | 1–15s | 1.5× |
+| | plan | first/last frame | subject pictures | length | sound |
+|---|---|:--:|:--:|---|:--:|
+| MiniMax H3 Max *(default)* | free | ✓ | ✗ | 5–15s | ✗ |
+| MiniMax H3 | free | ✓ | ✓ (9) | 4–15s | ✓ |
+| Seedance 2.0 Mini | free | ✓ | ✓ (9) | 4–15s | ✓ |
+| Seedance 2.0 Fast | free | ✓ | ✓ (9) | 4–15s | ✓ |
+| Veo 3.1 Lite | free | ✓ | — | 4, 6, 8s | ✓ |
+| Wan 3.0 | free | — | ✓ (9) | 2–**30s** | ✓ |
+| Seedance 2.0 | Max | ✓ | ✓ (9) | 4–15s | ✓ |
+| Seedance 2.5 | Max | ✓ | ✓ (9) | 4–**30s** | ✓ |
+| Kling 3.0 | Max | ✓ (needs a first frame) | ✗ | 3–15s | ✓ |
+| Veo 3.1 Fast | Max | ✓ | — | 4, 6, 8s | ✓ |
+| Veo 3.1 | Max | ✓ | — | 4, 6, 8s | ✓ |
+
+The quality setting's Best is 1080p on the three Veo models (the same price
+as Standard's 720p, about twice as slow) and Kling 3.0's pro mode (1080p, at
+450 credits a second against Standard's 350).
 
 Consequences worth saying out loud before someone plans around them:
 
-- **A reference sheet forces a model change.** The default cannot take
-  reference images, so any film with a locked character or product runs on
-  Seedance or MiniMax H3 — and Seedance is 2× the price. Say this when the
-  reference sheet is proposed, not when the bill arrives.
-- **Only Seedance reaches 30 seconds.** A single continuous 30-second shot is
-  one model's privilege; everything else must be cut from shorter pieces.
-- **Grok cannot do first/last frame**, so it cannot carry a continuous cut.
+- **Do not pick one model for the whole film.** On a Video canvas, give each
+  clip its shot kind (`params.shot`: establishing, action, dialogue, insert,
+  reaction, scene) and leave the model to Dokki: it tries the model best at
+  that kind of shot first, within the person's plan — Seedance for space and
+  camera moves, Seedance 2.0 or Kling for action, Veo or Kling for dialogue,
+  MiniMax H3 for inserts and reactions.
+- **The default makes no sound.** Every other model above does; a shot kind
+  routes away from the default.
+- **A clip keeps subject pictures or starts and ends on frames, never both**
+  (the gateway drops one). Identity then lives in the key frame, or in the
+  subject pictures — decide per shot.
+- **30 seconds in one generation** (Seedance 2.5, Wan 3.0) is how a whole
+  scene of several shots stays one face, one light, one space: write the shots
+  in time order in one prompt, then cut the clip at its shots.
 
 ## 6. Deliver the cutdowns
 

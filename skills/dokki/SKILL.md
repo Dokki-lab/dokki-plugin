@@ -17,12 +17,12 @@ goes in `args`.
 
 | Facade | What it covers |
 |--------|----------------|
-| `find` | list workspaces/resources, semantic search, grep, related entities |
-| `read` | read a doc / table / artifact / file, or `preview_resource` for a rendered preview |
+| `find` | list workspaces/resources, semantic search, grep, related entities, your Tasks |
+| `read` | read a doc / table / artifact / file / task, or `preview_resource` for a rendered preview |
 | `create` | create doc, table, artifact, folder, workspace, upload file |
 | `edit` | edit doc/table/artifact content + resource ops (rename, icon, move, tag, delete) |
 | `share` | share by email or set public access |
-| `message` | workspace channel: members, send, read |
+| `message` | workspace channel: members, send, read; a person's Tasks: ask, follow up, answer |
 | `skills` | folder-backed Skills: draft, validate, publish, install, bind to an Agent |
 | `publish` | published sites, publish/unpublish resources, custom domains |
 | `connect` | connect + call 1000+ external integrations (GitHub, Slack, Gmail, Notion, …) |
@@ -145,6 +145,7 @@ These are the high-value flows — chain skills in this order:
 1. `dokki-workspace` → `message {action:"members", workspace_id}` if the user names a person
 2. `dokki-workspace` → `message {action:"send", workspace_id, args:{content, require_response:true}}`
 3. `dokki-workspace` → `message {action:"read", workspace_id}` before proceeding
+   (a connection that is itself a Dokki Agent uses `chat.post` / `chat.read` in its own chats instead)
 
 #### 7. Update Published Content
 **"The published doc is stale, refresh it"**
@@ -158,6 +159,34 @@ These are the high-value flows — chain skills in this order:
 2. `connect {action:"tools", args:{toolkit:"github"}}` to find the right tool, then `connect {action:"call", args:{tool, args}}` to fetch the data
 3. `dokki-table` → `create {action:"table", workspace_id, args:{name, columns, rows}}` (structured) **or** `dokki-document` → `create {action:"doc", …}` (narrative) with the fetched data
 4. (Optional) `dokki-artifact` to visualize, or `dokki-publish` to share externally
+
+## When you need a person (Tasks)
+
+Some steps only a person can do: log in to another system and create a key, sign, call
+someone, approve something you cannot reach. Don't stop and hope they come back — give
+them a **Task**. It lands in their Tasks list (待办) with a notification, and you wait
+for the answer.
+
+1. `message {action:"task.create", args:{title, details?, done_when?, fields?, assignee?}}`
+   — `assignee` is `"me"` (default) or a teammate's e-mail in the same organization;
+   `fields` are the values to hand back (`[{label, type:"text"}]`). **Never ask for a
+   secret**: ask them to put it in the Vault and give its name as a field.
+2. Tell the user in one sentence what you asked for and why.
+3. Wait:
+   - **Claude Code / a shell:** run `dokki task wait <task_id>` with `run_in_background`;
+     you are woken when it exits. Exit 0 prints the task (`result.fields`, `result.note`);
+     exit 13 means declined or withdrawn — read the reason, don't assume it was done;
+     exit 11 means still open at `--wait-timeout`, so run it again.
+   - **No shell:** call `read {action:"task", args:{task_id, wait_seconds:45}}` in a loop
+     while `status` is `"open"` (waiting costs no MCP quota).
+4. Continue with what came back.
+
+Connected as a Dokki Agent (you have an inbox)? Follow the `next` that `task.create`
+returns: the answer arrives as a `<task_update>` turn in your inbox, `find tasks` lists
+only what you asked for, and completing or declining a task stays the person's.
+
+Tasks for you: `find {action:"tasks"}`; answer with `message {action:"task.complete",
+args:{task_id, fields, note}}` or `message {action:"task.decline", args:{task_id, reason}}`.
 
 ## Bootstrap: Context Resolution
 

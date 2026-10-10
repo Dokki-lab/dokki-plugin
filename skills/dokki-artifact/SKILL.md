@@ -35,8 +35,9 @@ bridge before the artifact's scripts. Everything visual goes in the one file:
 - behaviour → a `<script>` tag
 - data → inline, or read live from the workspace (see below)
 
-No CSS or framework is injected. A page that relies on Tailwind classes without
-loading Tailwind renders unstyled.
+No CSS framework or element styles are injected (a workspace design system
+adds CSS variables only — see Design system below). A page that relies on
+Tailwind classes without loading Tailwind renders unstyled.
 
 ### CDN libraries that work
 
@@ -72,7 +73,8 @@ common way a correct-looking generated artifact renders as nothing.
   the Artifact's Y.Doc and synchronized between editors.
 - Shared business/source-of-truth data → a Dokki **table** or **document**; read
   it through the live workspace data channel below.
-- Live workspace data → `window.dokki.readTable` / `readDocument` (below).
+- Live workspace data → `window.dokki.readTable` / `readDocument`, and table
+  rows changed from the page → `createRow` / `updateRow` / `deleteRow` (below).
 
 `create` and `edit` **reject** an artifact that uses any of the four browser
 storage globals above, so a page that reaches for them never reaches the user.
@@ -410,8 +412,69 @@ Instead of pasting a snapshot of a table into the source, read it at render time
 
 Both read as the **current viewer**, and only reach resources in the artifact's
 own workspace that both the viewer and the artifact's author can read. Always
-handle rejection — the viewer may lack access, and the channel is unavailable on
-published pages.
+handle rejection — the viewer may lack access.
+
+On a **website-mode site** (see `dokki-publish` → Website Mode) the same calls
+return the snapshot of that table or document published on the same site, plus
+`window.dokki.readCollection(folderId)` and `window.dokki.readArticle(id)` for a
+blog inside the website (both also work here, live, for previewing a template).
+Everywhere else a published artifact's reads reject.
+
+### Design system
+
+When the workspace has a design system, its tokens reach every artifact — HTML
+and JSX, in Dokki and on published pages — as CSS variables named
+`--ds-<token>`, declared on `:root` before your own styles and switched to their
+Dark values under `prefers-color-scheme: dark`, `data-theme="dark"` or `.dark`.
+Style with them instead of hard-coded values, with a fallback for when no system
+applies: `background: var(--ds-accent, #2563eb)`. `window.dokki.designSystem`
+lists them — `{ id, name, tokens: [{ name, group, light, dark, usage }], assets }`,
+or `null` — and `window.dokki.designSystem.var("accent")` returns
+`"var(--ds-accent)"`. `window.dokki.readFile(id)` turns a file or image id (such
+as a logo from `designSystem.assets`) into
+`{ id, name, mimeType, size, url, expiresAt }`; `url` is a short-lived signed
+link, so read again instead of storing it. Published pages carry the variables
+and the token list but cannot read files.
+
+### Changing table rows
+
+An artifact can add, edit and delete rows of a table in its own workspace:
+
+```html
+<script>
+  const TABLE = "<table resource-uuid>";
+  (async () => {
+    const { columns, rows } = await window.dokki.readTable(TABLE);
+    const status = columns.find((c) => c.name === "Status").id;
+
+    // Keys are COLUMN IDS, exactly as readTable returns them.
+    const created = await window.dokki.createRow(TABLE, { [status]: "Open" });
+    // -> { id, version, ...values }
+
+    const row = rows[0];
+    await window.dokki.updateRow(TABLE, row.id, { [status]: "Approved" }, {
+      expectedVersion: row.version, // optional: refuse if someone changed the row since
+    });
+    await window.dokki.deleteRow(TABLE, created.id); // -> { id, deleted: true }
+  })().catch((error) => showMessage(error.message));
+</script>
+```
+
+- **The first write to each table asks a person once.** The viewer sees a
+  prompt over the artifact; someone who can edit both that table and the
+  artifact allows it, and the held call then succeeds. After that it never asks
+  again for that table — editing the artifact's source does not reset it.
+  Nothing you (or any tool) call can allow it on a person's behalf.
+- **Every write still runs as the viewer.** They must be able to edit the table
+  themselves; the allowance does not lend anyone access they lack.
+- **Handle rejection as normal**: the person may choose not to allow it, the
+  viewer may only be able to read the table, or someone may have changed the row
+  (`error.code === "conflict"` — read again and retry). Show the sentence in
+  `error.message`.
+- **Published pages are read-only.** On `/pub` and website pages these calls
+  always reject.
+- People can see and revoke what an artifact may change in its More menu →
+  Table access.
 
 ---
 
@@ -455,6 +518,8 @@ To see a rendered inline preview, use `preview_resource {resource_id}`.
 | Assuming the app's theme applies | The iframe is isolated; it inherits nothing | Set your own colours; `@media (prefers-color-scheme: dark)` for both |
 | Forgetting chart dimensions | Canvas/SVG renders at 0px | Give the container an explicit height |
 | External data fetching from your own API | Only public CDNs are reachable | Inline the data, or use `window.dokki.readTable/readDocument` |
+| Writing table rows keyed by column NAME | Rejected as an unknown column | Resolve ids from `readTable().columns` first |
+| Treating a rejected first write as a bug | The first write waits for a person to allow it, and they may decline | Catch it and show `error.message` |
 | `artifact.patch` with fuzzy match | Fails silently or edits the wrong spot | `old_string` must be exact (incl. whitespace & indentation) |
 | Giant single-file artifact (>500 lines) | Slow to render, hard to edit | Keep it focused |
 
@@ -490,6 +555,20 @@ When one of these becomes hard to keep working, port it to HTML.
 
 ## Cross-Skill Follow-Ups
 
-- Need the data first? → `dokki-table` to create/read the table, then read it live via `window.dokki.readTable`
+- Need the data first? → `dokki-table` to create/read the table, then read it live via `window.dokki.readTable` (and change rows with `createRow` / `updateRow` / `deleteRow`)
 - Publish the artifact in a docs site? → `dokki-publish`
 - Place next to related docs? → `dokki-workspace` `edit {action:"resource.move"}`
+
+## Design system tokens
+
+When the workspace keeps a design system (a Design system folder with a Tokens
+table), every artifact in it receives the tokens as CSS variables named
+`--ds-<token>` — Light on `:root`, Dark under the page's dark switch — and your
+prompt lists them in a `<design_system>` block. Read the system's DESIGN.md
+first, then style with the variables instead of hard-coded values:
+`background: var(--ds-surface); color: var(--ds-foreground); border-radius:
+var(--ds-radius)`. Keep a literal fallback only where the page must also work
+outside the workspace (`var(--ds-accent, #2563eb)`). JSX artifacts use the same
+variables through `style={{ color: "var(--ds-accent)" }}` or Tailwind's
+arbitrary values (`bg-[var(--ds-surface)]`). No design system, no variables:
+the page looks exactly as you wrote it.

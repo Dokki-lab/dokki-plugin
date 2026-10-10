@@ -2,7 +2,21 @@
   "mcpServers": {
     "dokki": {
       "type": "http",
-      "url": "https://dokki.one/mcp/v2"
+      "url": "${DOKKI_BASE_URL:-https://dokki.one}/mcp/v2"
+    },
+    "dokki-channel": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/dokki.mjs", "agent", "channel"],
+      "env": {
+        "DOKKI_CLI_COMMAND": "node ${CLAUDE_PLUGIN_ROOT}/bin/dokki.mjs",
+        "DOKKI_AGENT": "${DOKKI_AGENT:-}",
+        "DOKKI_AGENT_KEY": "${DOKKI_AGENT_KEY:-}",
+        "DOKKI_BASE_URL": "${DOKKI_BASE_URL:-}",
+        "DOKKI_INCLUDE_MESSAGES": "${DOKKI_INCLUDE_MESSAGES:-1}",
+        "DOKKI_CONFIG_DIR": "${DOKKI_CONFIG_DIR:-}",
+        "XDG_CONFIG_HOME": "${XDG_CONFIG_HOME:-}"
+      }
     }
   }
 }

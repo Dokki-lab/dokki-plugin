@@ -152,6 +152,11 @@ or wait for a teammate's answer before continuing.
 ### Pitfalls
 
 - Messages are posted as the authenticated Dokki user.
+- A connection that is itself a Dokki Agent (it joined as an Agent, or uses an Agent's own
+  key) never speaks as a person: `send`, `read`, `members` and `review.request` refuse there.
+  Use `message {action:"chat.post"|"chat.read"|"chat.members", args:{conversation_id, …}}` in
+  the chats the Agent is a member of, and answer a turn from its inbox with
+  `message {action:"reply", args:{event_id, text}}`.
 - For destructive or visible actions, wait for an explicit reply before continuing.
 - Keep the message self-contained: what you plan to do, what answer you need, and any
   resource links or short IDs.
