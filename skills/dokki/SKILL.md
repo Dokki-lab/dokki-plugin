@@ -10,9 +10,9 @@ This is the **entry skill** for Dokki. When a user describes what they want to d
 
 ## The facade surface
 
-Dokki's MCP exposes **10 facade tools + `preview_resource`**. Every call is `<facade>` with
-`{ action: "<action>", <top-level ids>, args: { <payload> } }`. Top-level ids are
-`workspace_id`, `resource_id`, `parent_id`, `insert_after_id`, `site_id`; everything else
+The Dokki plugin's MCP server exposes **8 facade tools + `preview_resource`**. Every call is
+`<facade>` with `{ action: "<action>", <top-level ids>, args: { <payload> } }`. Top-level ids
+are `workspace_id`, `resource_id`, `parent_id`, `insert_after_id`, `site_id`; everything else
 goes in `args`.
 
 | Facade | What it covers |
@@ -25,8 +25,9 @@ goes in `args`.
 | `message` | workspace channel: members, send, read; a person's Tasks: ask, follow up, answer |
 | `skills` | folder-backed Skills: draft, validate, publish, install, bind to an Agent |
 | `publish` | published sites, publish/unpublish resources, custom domains |
-| `connect` | connect + call 1000+ external integrations (GitHub, Slack, Gmail, Notion, …) |
-| `agent` | manage and run the user's Dokki Agents (roster, teams, schedules); query and cancel delegated runs |
+
+This plugin does not reach the user's other accounts (GitHub, Slack, Gmail, …) and does not
+run Dokki Agents. Both happen in the Dokki app; say so when the user asks for them.
 
 ### Facade self-teaching conventions
 
@@ -52,7 +53,6 @@ The facades teach themselves — you rarely need to enumerate every arg:
 | Build and manage automated workflows | `dokki-automation` | `find {action:"automations"}`, `read {action:"automation"/"automation.runs"}`, `create {action:"automation"}`, `edit {action:"automation.update"/"automation.run"/"automation.delete"}` |
 | Build a UI / chart / diagram as an HTML page | `dokki-artifact` | `create {action:"artifact"}`, `read {action:"artifact"}`, `edit {action:"artifact.update"/"artifact.patch"}` |
 | Publish as a public site | `dokki-publish` | `publish {action:"site"/"site.create"/"site.update"/"add"/"remove"/"domain.*"}` |
-| Connect & use external integrations | `dokki-workspace` (CONNECT mode) | `connect {action:"apps"/"list"/"authorize"/"disconnect"/"tools"/"call"}` |
 
 ## Intent → Skill Routing
 
@@ -75,30 +75,6 @@ Match the user's request to these patterns:
 | "Create / edit / run an automation" / "Build a workflow" | `dokki-automation` |
 | "Make a chart / dashboard / widget" | `dokki-artifact` (create) |
 | "Make this doc / workspace public" | `dokki-publish` |
-| "Connect my GitHub / Slack / Gmail" / "Pull data from <app>" | `dokki-workspace` (CONNECT) |
-
-### External integrations — the `connect` facade
-
-The canonical home for this is **`dokki-workspace` CONNECT mode** — route there for the full
-flow. This table is the router's quick reference for orchestrating it inside multi-skill
-workflows (e.g. #8 below).
-
-Dokki's MCP is also a **gateway to 1000+ external integrations** (via Composio: GitHub,
-Slack, Gmail, Notion, Google Sheets/Drive/Calendar, Linear, and more). Connections are
-**user-scoped** — the user authorizes their own accounts *through* Dokki, once, and every
-skill can then read/write those systems.
-
-| Step | Call |
-|------|------|
-| Discover integrations | `connect {action:"apps", args:{query?, limit?}}` |
-| See what's already connected | `connect {action:"list"}` |
-| Authorize a new one | `connect {action:"authorize", args:{toolkit:"github"}}` → open the returned `authorize_url`, then poll `connect {action:"list"}` until active |
-| Disconnect | `connect {action:"disconnect", args:{connection_id}}` |
-| List callable tools | `connect {action:"tools", args:{toolkit?}}` |
-| Run a tool | `connect {action:"call", args:{tool, args}}` — the relay executes it |
-
-When a user asks to pull data from or push data to an outside system, check `connect list`
-first; if the toolkit isn't connected, walk them through `authorize` before calling tools.
 
 ### Multi-skill workflows
 
@@ -153,13 +129,6 @@ These are the high-value flows — chain skills in this order:
 2. `dokki-publish` → re-call `publish {action:"add", site_id, resource_id}` (refreshes the frozen snapshot)
 3. Confirm the public URL now shows the new content
 
-#### 8. External Data → Dokki
-**"Pull my open GitHub issues (or latest Slack messages) into a Dokki doc/table"**
-1. `connect {action:"list"}` — confirm the toolkit is connected; if not, `connect {action:"authorize", args:{toolkit:"github"}}` and walk the user through the OAuth URL
-2. `connect {action:"tools", args:{toolkit:"github"}}` to find the right tool, then `connect {action:"call", args:{tool, args}}` to fetch the data
-3. `dokki-table` → `create {action:"table", workspace_id, args:{name, columns, rows}}` (structured) **or** `dokki-document` → `create {action:"doc", …}` (narrative) with the fetched data
-4. (Optional) `dokki-artifact` to visualize, or `dokki-publish` to share externally
-
 ## When you need a person (Tasks)
 
 Some steps only a person can do: log in to another system and create a key, sign, call
@@ -211,7 +180,6 @@ Some intents are genuinely ambiguous. Decision hints:
 - **"Visualize X"** → Is data already in Dokki? → `dokki-artifact` reading from a table. Is it new data? → `dokki-table` first, then `dokki-artifact`.
 - **"Share with someone"** → Single user by email → `dokki-workspace` `share {action:"user"}`. Public URL → `dokki-publish`.
 - **"Show me what's there"** → Hierarchy view → `dokki-workspace` browse. Content search → `dokki-workspace` search.
-- **"Get X from <external app>"** → `dokki-workspace` CONNECT mode first to fetch, then route the result to the right content skill.
 
 ## Output Conventions
 

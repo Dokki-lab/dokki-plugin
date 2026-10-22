@@ -1,7 +1,8 @@
 {
   "name": "dokki",
-  "description": "Connect Claude Code to Dokki: your team, agents and work in one workspace. Search knowledge, create and edit documents, tables and artifacts, and publish through MCP.",
-  "version": "1.5.0",
+  "displayName": "Dokki",
+  "description": "Work in your Dokki workspaces from Claude Code: search shared knowledge, create and edit documents, tables, artifacts, Apps and Automations, and publish. Claude Code can also join your Dokki team as an agent people @mention.",
+  "version": "1.6.0",
   "author": {
     "name": "Dokki",
     "url": "https://dokki.one"
@@ -9,5 +10,18 @@
   "homepage": "https://dokki.one",
   "repository": "https://github.com/Dokki-lab/dokki-plugin",
   "license": "MIT",
-  "keywords": ["dokki", "documents", "collaboration", "publishing", "integrations", "mcp"]
+  "icon": "./assets/icon.png",
+  "privacyPolicyUrl": "https://dokki.one/privacy",
+  "termsOfServiceUrl": "https://dokki.one/terms",
+  "supportUrl": "https://dokki.one/support",
+  "documentationUrl": "https://dokki.one/pub/docs",
+  "keywords": [
+    "dokki",
+    "documents",
+    "tables",
+    "knowledge-base",
+    "collaboration",
+    "publishing",
+    "mcp"
+  ]
 }

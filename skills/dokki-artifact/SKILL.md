@@ -2,7 +2,7 @@
 name: dokki-artifact
 description: Create or edit artifacts — self-contained HTML pages, dashboards, charts, diagrams, animations, calculators, prototypes. Use for anything interactive or visual beyond what a document can express.
 argument-hint: <description-or-id> [instruction]
-allowed-tools: mcp__dokki__create mcp__dokki__read mcp__dokki__edit mcp__dokki__preview_resource
+allowed-tools: mcp__plugin_dokki_dokki__read mcp__plugin_dokki_dokki__preview_resource
 ---
 
 # Dokki Artifact — Create & Edit

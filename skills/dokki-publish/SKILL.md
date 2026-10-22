@@ -2,7 +2,7 @@
 name: dokki-publish
 description: Publish Dokki content as a public site — manage published sites, publish or unpublish resources, configure custom domains and site settings.
 argument-hint: <action> [workspace-or-site] [details]
-allowed-tools: mcp__dokki__publish mcp__dokki__find
+allowed-tools: mcp__plugin_dokki_dokki__find
 ---
 
 # Dokki Publish — Sites, Resources & Custom Domains

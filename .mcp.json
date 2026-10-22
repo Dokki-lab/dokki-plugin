@@ -2,7 +2,7 @@
   "mcpServers": {
     "dokki": {
       "type": "http",
-      "url": "${DOKKI_BASE_URL:-https://dokki.one}/mcp/v2"
+      "url": "${DOKKI_BASE_URL:-https://dokki.one}/mcp/v2/directory"
     },
     "dokki-channel": {
       "type": "stdio",

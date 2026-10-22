@@ -2,7 +2,7 @@
 name: dokki-table
 description: Create tables with typed columns, and edit rows, columns, and cells. Use for structured/tabular data.
 argument-hint: <action> [table-name-or-id] [details]
-allowed-tools: mcp__dokki__create mcp__dokki__read mcp__dokki__edit
+allowed-tools: mcp__plugin_dokki_dokki__read
 ---
 
 # Dokki Table — Create & Manage

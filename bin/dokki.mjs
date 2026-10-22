@@ -245,7 +245,7 @@ function assertKnownFlags(flags, allowed, command, hint) {
 }
 
 // cli/src/http.ts
-var CLI_VERSION = "1.0.0";
+var CLI_VERSION = "1.1.0";
 var IDEMPOTENT = /* @__PURE__ */ new Set(["GET", "HEAD", "PUT", "DELETE", "OPTIONS"]);
 var MAX_RETRY_WAIT_MS = 3e4;
 function buildUrl(baseUrl, path, query) {
@@ -481,7 +481,7 @@ function requireApiKey(target) {
     throw new CliError(
       EXIT.auth,
       "not_authenticated",
-      "No API key. Run `dokki auth login` and paste one, or set DOKKI_API_KEY. Create a key in Dokki: Connect > AI tools (https://dokki.one/workspace/apps/connect?tab=ai)."
+      "No API key. Run `dokki auth login` to sign in in the browser, or set DOKKI_API_KEY to a key from Connect > AI tools (https://dokki.one/workspace/apps/connect?tab=ai)."
     );
   }
   return target.apiKey;
@@ -878,7 +878,7 @@ function channelKeyStartLine() {
   return `DOKKI_AGENT_KEY=<key> claude --dangerously-load-development-channels ${CHANNEL_PLUGIN_REF}`;
 }
 function connectHint(cli = "dokki") {
-  return `No Dokki agent is connected in this Claude Code session. Made the agent in Dokki (Agents › Add › Outside agent)? Quit Claude Code and start it with the line the page showed, which carries the agent's key: ${channelKeyStartLine()} (with DOKKI_BASE_URL=<site> in front for a site other than dokki.one). Or create the agent from a terminal, which saves its key on this computer: ${cli} auth login (paste your own Dokki key when asked), then ${cli} agent connect --name <name>; then quit Claude Code and start it as the agent: ${channelStartLine()}.`;
+  return `No Dokki agent is connected in this Claude Code session. Made the agent in Dokki (Agents › Add › Outside agent)? Quit Claude Code and start it with the line the page showed, which carries the agent's key: ${channelKeyStartLine()} (with DOKKI_BASE_URL=<site> in front for a site other than dokki.one). Or create the agent from a terminal, which saves its key on this computer: ${cli} auth login (allow it in the browser it opens), then ${cli} agent connect --name <name>; then quit Claude Code and start it as the agent: ${channelStartLine()}.`;
 }
 function unnamedAgentReason(slugs) {
   const saved = slugs.join(", ");
@@ -2607,12 +2607,209 @@ async function runAgentBuiltin(ctx, sub, flags, verb) {
   }
 }
 
+// cli/src/auth/browser-login.ts
+import { createHash as createHash2, randomBytes as nodeRandomBytes } from "node:crypto";
+var CODE = /^[0-9A-HJKMNP-TV-Z]{10}$/;
+function normalizeLoginCode(input) {
+  const code = input.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+  return CODE.test(code) ? code : null;
+}
+function base64url(bytes) {
+  return Buffer.from(bytes).toString("base64").replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+function pkcePair(random) {
+  const verifier = base64url(random(32));
+  const challenge = base64url(createHash2("sha256").update(verifier).digest());
+  return { verifier, challenge };
+}
+function onRemoteShell(env) {
+  return Boolean(env.SSH_CONNECTION || env.SSH_CLIENT || env.SSH_TTY);
+}
+async function postJson(ctx, baseUrl, path, json) {
+  const url = `${baseUrl}${path}`;
+  let response;
+  try {
+    response = await ctx.runtime.fetch(url, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        "user-agent": `dokki-cli/${CLI_VERSION}`
+      },
+      body: JSON.stringify(json),
+      signal: AbortSignal.timeout(ctx.globals.timeoutSeconds * 1e3)
+    });
+  } catch (error) {
+    const name = error.name;
+    const timedOut = name === "TimeoutError" || name === "AbortError";
+    throw new CliError(
+      EXIT.server,
+      timedOut ? "timeout" : "network_error",
+      timedOut ? `POST ${url} timed out after ${ctx.globals.timeoutSeconds}s (raise --timeout)` : `POST ${url} failed: ${error.message}`
+    );
+  }
+  const isJson = (response.headers.get("content-type") ?? "").toLowerCase().includes("json");
+  let body = null;
+  if (isJson) {
+    const parsed = await response.json().catch(() => null);
+    body = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  }
+  return { status: response.status, body, json: isJson };
+}
+function answerError(answer, fallback) {
+  const code = typeof answer.body?.code === "string" ? answer.body.code : `http_${answer.status}`;
+  const message = typeof answer.body?.error === "string" ? answer.body.error : fallback;
+  const { error: _e, code: _c, ...rest } = answer.body ?? {};
+  return new CliError(exitCodeForStatus(answer.status), code, message, {
+    status: answer.status,
+    ...Object.keys(rest).length > 0 ? { details: rest } : {}
+  });
+}
+var BrowserLoginUnsupported = class extends Error {
+};
+function escapeHtml(text) {
+  return text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+}
+var DONE_PAGE = (title, line) => `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1.5rem;line-height:1.5"><h1 style="font-size:1.25rem">${escapeHtml(title)}</h1><p>${escapeHtml(line)}</p></body></html>`;
+async function browserLogin(ctx, baseUrl, options) {
+  const { runtime } = ctx;
+  const random = runtime.randomBytes ?? ((size) => new Uint8Array(nodeRandomBytes(size)));
+  const { verifier, challenge } = pkcePair(random);
+  const remote = onRemoteShell(runtime.env);
+  const canLoopback = !options.noBrowser && !remote && Boolean(runtime.loopback && runtime.openUrl);
+  if (!canLoopback && !(runtime.stdinIsTTY && runtime.promptSecret)) {
+    throw usageError(
+      remote || options.noBrowser ? "dokki auth login needs a terminal to paste the browser's code into; run it in one, or pass a key with --api-key -" : "dokki auth login cannot open a browser here; run it in a terminal, or pass a key with --api-key -",
+      {
+        hint: "Create a key in Dokki: Connect > AI tools (https://dokki.one/workspace/apps/connect?tab=ai)."
+      }
+    );
+  }
+  const server = canLoopback ? await runtime.loopback?.().catch(() => null) : null;
+  try {
+    const clientName = runtime.hostname?.() || "this computer";
+    const started = await postJson(ctx, baseUrl, "/api/api-keys/cli-login", {
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      client_name: clientName,
+      ...server ? { redirect_port: server.port } : {}
+    });
+    if (!started.json || started.status === 404 || started.status === 405) {
+      throw new BrowserLoginUnsupported();
+    }
+    if (started.status !== 201) throw answerError(started, "Could not start the sign-in");
+    const requestId = String(started.body?.request_id ?? "");
+    const url = String(started.body?.authorization_url ?? "");
+    const expiresAt = Date.parse(String(started.body?.expires_at ?? ""));
+    if (!requestId || !url) throw answerError(started, "Could not start the sign-in");
+    const deadline = Number.isFinite(expiresAt) ? expiresAt : runtime.now() + 6e5;
+    runtime.stderr(`Sign in to Dokki in your browser:
+
+  ${url}
+
+`);
+    if (server) {
+      const opened = await runtime.openUrl?.(url).catch(() => false);
+      runtime.stderr(
+        opened ? "Opened your browser. Allow the sign-in there; this waits until you do (Ctrl-C to stop).\n" : "Open the address above in a browser on this computer and allow the sign-in; this waits until you do (Ctrl-C to stop).\n"
+      );
+      runtime.stderr("On another computer? Stop this and run `dokki auth login --no-browser`.\n");
+      for (; ; ) {
+        const callback = await server.next(Math.max(0, deadline - runtime.now()));
+        if (!callback) {
+          throw new CliError(
+            EXIT.auth,
+            "login_timeout",
+            "The sign-in was not finished in time; nothing was saved. Run dokki auth login again."
+          );
+        }
+        if (callback.params.get("request_id") !== requestId) {
+          callback.respond(
+            400,
+            DONE_PAGE("Not this sign-in", "This address belongs to another sign-in.")
+          );
+          continue;
+        }
+        if (callback.params.get("error")) {
+          callback.respond(
+            200,
+            DONE_PAGE("Sign-in cancelled", "Nothing was created. You can close this tab.")
+          );
+          throw new CliError(
+            EXIT.auth,
+            "login_cancelled",
+            "The sign-in was cancelled in the browser; nothing was saved"
+          );
+        }
+        return await redeem(
+          ctx,
+          baseUrl,
+          requestId,
+          verifier,
+          callback.params.get("code") ?? "",
+          callback
+        );
+      }
+    }
+    runtime.stderr(
+      "Open the address above in any browser, allow the sign-in, then paste the code it shows.\n"
+    );
+    for (; ; ) {
+      const typed = await runtime.promptSecret?.("Code from the browser: ");
+      if (typed === null || typed === void 0) {
+        throw new CliError(EXIT.usage, "canceled", "Cancelled; nothing was saved");
+      }
+      try {
+        return await redeem(ctx, baseUrl, requestId, verifier, typed, null);
+      } catch (error) {
+        const left = error.details;
+        if (error instanceof CliError && error.code === "invalid_code" && (left?.attempts_left ?? 1) > 0) {
+          runtime.stderr("That code is not right. Check it and paste it again.\n");
+          continue;
+        }
+        throw error;
+      }
+    }
+  } finally {
+    await server?.close().catch(() => void 0);
+  }
+}
+async function redeem(ctx, baseUrl, requestId, verifier, typed, callback) {
+  const code = normalizeLoginCode(typed);
+  if (!code) {
+    callback?.respond(
+      400,
+      DONE_PAGE("Sign-in failed", "The address was incomplete. Run dokki auth login again.")
+    );
+    throw new CliError(EXIT.invalid, "invalid_code", "That is not a sign-in code", {
+      details: { attempts_left: 1 }
+    });
+  }
+  const answer = await postJson(ctx, baseUrl, "/api/api-keys/cli-login/token", {
+    request_id: requestId,
+    code,
+    code_verifier: verifier
+  });
+  const apiKey = typeof answer.body?.api_key === "string" ? answer.body.api_key : "";
+  if (answer.status !== 201 || !apiKey) {
+    const error = answerError(answer, "Could not finish the sign-in");
+    callback?.respond(200, DONE_PAGE("Sign-in failed", `${error.message} You can close this tab.`));
+    throw error;
+  }
+  callback?.respond(
+    200,
+    DONE_PAGE("You're signed in", "The dokki command line has its key. You can close this tab.")
+  );
+  const key = answer.body?.key;
+  return { apiKey, keyName: typeof key?.name === "string" ? key.name : null };
+}
+
 // cli/src/commands/auth.ts
 var AUTH_COMMANDS = {
   login: {
-    summary: "Save an API key (verifies it first) to a profile",
-    usage: "dokki auth login [--api-key -|@<file>] [--base-url https://dokki.one] [--profile name]",
-    flags: ["api-key", "base-url", "profile", "no-verify"]
+    summary: "Sign in: allow it in the browser, or save an API key you already have (verified first), to a profile",
+    usage: "dokki auth login [--no-browser] [--with-key | --api-key -|@<file>] [--base-url https://dokki.one] [--profile name]",
+    flags: ["api-key", "base-url", "profile", "no-verify", "no-browser", "with-key"]
   },
   status: {
     summary: "Show which key and host are in use, and who the key belongs to",
@@ -2635,7 +2832,7 @@ var AUTH_COMMANDS = {
     flags: []
   }
 };
-var AUTH_BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["no-verify", "offline"]);
+var AUTH_BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["no-verify", "offline", "no-browser", "with-key"]);
 async function askForKey(ctx) {
   const runtime = ctx.runtime;
   if (!runtime.stdinIsTTY || !runtime.promptSecret) {
@@ -2681,7 +2878,35 @@ async function runAuth(ctx, sub, flags) {
       lastValue(flags, "base-url") ?? (explicitProfile !== void 0 ? existing.base_url ?? fromEnv : fromEnv ?? existing.base_url) ?? DEFAULT_BASE_URL
     );
     const keyRaw = lastValue(flags, "api-key") ?? flags.positionals[0];
-    const apiKey = keyRaw ? (await ctx.values.text(keyRaw, "--api-key")).trim() : await askForKey(ctx);
+    let apiKey;
+    let keyName = null;
+    let signedInWith = "key";
+    if (keyRaw) {
+      apiKey = (await ctx.values.text(keyRaw, "--api-key")).trim();
+    } else if (lastValue(flags, "with-key") === "true") {
+      apiKey = await askForKey(ctx);
+    } else if (ctx.runtime.env.CI) {
+      throw usageError(
+        "dokki auth login in CI needs a key: set DOKKI_API_KEY, or pass one with --api-key - (or --api-key @<path>)",
+        {
+          hint: "Create a key in Dokki: Connect > AI tools (https://dokki.one/workspace/apps/connect?tab=ai)."
+        }
+      );
+    } else {
+      try {
+        const result = await browserLogin(ctx, baseUrl, {
+          noBrowser: lastValue(flags, "no-browser") === "true"
+        });
+        apiKey = result.apiKey;
+        keyName = result.keyName;
+        signedInWith = "browser";
+      } catch (error) {
+        if (!(error instanceof BrowserLoginUnsupported)) throw error;
+        ctx.runtime.stderr(`${baseUrl} does not offer browser sign-in yet; paste a key instead.
+`);
+        apiKey = await askForKey(ctx);
+      }
+    }
     if (!apiKey) throw usageError("No key was given; nothing was saved");
     let principal;
     if (lastValue(flags, "no-verify") !== "true") {
@@ -2705,6 +2930,8 @@ async function runAuth(ctx, sub, flags) {
         profile: profileName,
         base_url: baseUrl,
         api_key: maskKey(apiKey),
+        signed_in_with: signedInWith,
+        ...keyName ? { key_name: keyName } : {},
         verified: principal !== void 0,
         ...principal ? { principal } : {}
       },
@@ -2871,12 +3098,12 @@ var catalog_generated_default = {
       facade: "find",
       action: "resources",
       summary: "List a workspace's resources as a tree.",
-      detail: "A resource carries `tags` and `metadata` when it has them and omits the field when it does not. `args.filter` {tags, type, updated_after, updated_before, created_after, created_before} returns a flat list of matches, and every match carries its own updated_at and created_at. Big workspace? Browse level by level with `args.depth` (and `parent_id` to descend); nodes at the cut carry child_count + children_not_loaded.",
+      detail: "A resource carries `tags` and `metadata` when it has them and omits the field when it does not. `args.filter` {tags, type, updated_after, updated_before, created_after, created_before} returns a flat list of matches, and every match carries its own updated_at and created_at. Big workspace? Browse level by level with `args.depth` (and `parent_id` to descend); nodes at the cut carry child_count + children_not_loaded. One level (`args.depth: 1`) longer than a page comes back truncated with next_offset: pass it as `args.offset` for the next page.",
       ids: {
         workspace_id: "required",
         parent_id: "optional"
       },
-      args_hint: "depth (1–5 levels), parent_id (descend), head/preview_head (0–500 chars; 0 disables). Optional filter (AND-ed): { tags?: string[], tags_match?: 'any'|'all', type?: (document|table|artifact|file|form)[], updated_after?, updated_before?, created_after?, created_before? (ISO dates), resource_ids?: string[] (restrict to these resources — e.g. search WITHIN one long document), metadata?: object (resources.metadata contains), owner?: string ('me' or a user id — creator), collaborator?: string ('me' or a user id — was shared it, individually or via a group) }",
+      args_hint: "depth (1–5 levels), parent_id (descend), offset (depth=1 next page), head/preview_head (0–500 chars; 0 disables). Optional filter (AND-ed): { tags?: string[], tags_match?: 'any'|'all', type?: (document|table|artifact|file|form)[], updated_after?, updated_before?, created_after?, created_before? (ISO dates), resource_ids?: string[] (restrict to these resources — e.g. search WITHIN one long document), metadata?: object (resources.metadata contains), owner?: string ('me' or a user id — creator), collaborator?: string ('me' or a user id — was shared it, individually or via a group) }",
       example: {
         action: "resources",
         workspace_id: "<workspace id>",
@@ -2914,6 +3141,12 @@ var catalog_generated_default = {
                 type: "integer",
                 minimum: 1,
                 maximum: 5
+              },
+              offset: {
+                description: "Paging one level (depth=1): a level longer than a page says truncated and next_offset; pass that here for the next page.",
+                type: "integer",
+                minimum: 0,
+                maximum: 9007199254740991
               },
               head: {
                 description: "Short alias for preview_head. Defaults to 40; set 0 to disable.",
@@ -3973,6 +4206,58 @@ var catalog_generated_default = {
     },
     {
       facade: "read",
+      action: "file.text",
+      summary: "Read a file's text (PDF, Word, PowerPoint, Excel, text).",
+      detail: "Returns text, page (the part), total_pages (how many parts) and total_chars. A part is a stretch of the extracted text, not a page of the original file. A scanned PDF is read only from the text Dokki already recognised in it; when there is none the result says scanned and needs_ocr. An Automation step recognises such a scan with AI, which uses credits.",
+      ids: {
+        resource_id: "required"
+      },
+      args_hint: "{ page?: number (which part of the text, default 1; a part past the end is empty), page_size?: number (characters per part, 1000–50000, default 12000; an Automation step reads up to 24,000 per part), page_bytes?: number (also cap each part's UTF-8 bytes) }",
+      example: {
+        action: "file.text",
+        resource_id: "<resource id>"
+      },
+      unknown_args: "refused",
+      schema: {
+        type: "object",
+        properties: {
+          resource_id: {
+            type: "string",
+            description: "File resource ID (resources.id)",
+            resource_kind: "file",
+            id_space: "resource"
+          },
+          args: {
+            type: "object",
+            properties: {
+              page: {
+                description: "Which part of the text to read (default 1). A part is a stretch of the extracted text, not a page of the original file; a part past the end comes back empty.",
+                type: "integer",
+                minimum: 1,
+                maximum: 9007199254740991
+              },
+              page_size: {
+                description: "Characters per part (default 12000; an Automation step reads parts of up to 24,000 characters).",
+                type: "integer",
+                minimum: 1e3,
+                maximum: 5e4
+              },
+              page_bytes: {
+                description: "Also keep each part within this many bytes of UTF-8 (default: no byte limit). Parts stay contiguous, so a long Chinese text simply has more parts.",
+                type: "integer",
+                minimum: 1e3,
+                maximum: 1048576
+              }
+            }
+          }
+        },
+        required: [
+          "resource_id"
+        ]
+      }
+    },
+    {
+      facade: "read",
       action: "app",
       summary: "Read a Dokki App: manifest, releases, installation.",
       detail: "Returns the draft manifest (screens with their routes, components with their export names, data bindings), every published release with its content digest and declared capabilities, and the current installation with the capabilities actually approved.",
@@ -4235,6 +4520,7 @@ var catalog_generated_default = {
         "scope_type",
         "name"
       ],
+      args_hint: "{ scope_type: 'personal'|'organization', name: string, description?: string, workflow?: object, trigger_type?: 'manual'|'schedule'|'event'|'webhook', trigger_config?: object, handler_code?: string, handler_language?: 'javascript'|'typescript', enabled?: boolean }",
       example: {
         action: "automation",
         organization_id: "<organization id>",
@@ -4769,7 +5055,8 @@ var catalog_generated_default = {
         [
           "source",
           "template_id",
-          "template"
+          "template",
+          "artifact_variant"
         ]
       ],
       args_hint: "{ name: string, source?: string (the page source), template_id?: string (from find.artifact_templates) — exactly one, though a variant may omit both for its starter, artifact_variant?: 'diagram'|'design'|'slide'|'canvas'|'video-canvas'|'mindmap'|'component'|'screen', metadata?: object, template?: string (from find.templates, alone; name then optional), language?: 'en'|'zh-CN'|'zh-TW' }",
@@ -4885,6 +5172,11 @@ var catalog_generated_default = {
                   {
                     required: [
                       "template"
+                    ]
+                  },
+                  {
+                    required: [
+                      "artifact_variant"
                     ]
                   }
                 ]
@@ -5134,6 +5426,7 @@ var catalog_generated_default = {
       required_args: [
         "automation_id"
       ],
+      args_hint: "{ automation_id: string, base_revision_id?: string, name?: string, description?: string, workflow?: object, trigger_type?: 'manual'|'schedule'|'event'|'webhook', trigger_config?: object, handler_code?: string, handler_language?: 'javascript'|'typescript', enabled?: boolean }",
       example: {
         action: "automation.update",
         args: {
@@ -5222,6 +5515,7 @@ var catalog_generated_default = {
       required_args: [
         "automation_id"
       ],
+      args_hint: "{ automation_id: string, revision_id?: string, idempotency_key?: string, payload?: object }",
       example: {
         action: "automation.run",
         args: {
@@ -5344,6 +5638,7 @@ var catalog_generated_default = {
       required_args: [
         "automation_id"
       ],
+      args_hint: "{ automation_id: string }",
       example: {
         action: "automation.delete",
         args: {
@@ -7704,8 +7999,8 @@ var catalog_generated_default = {
     {
       facade: "edit",
       action: "slides.update",
-      summary: "Apply ops / add_slides to a Slide deck.",
-      detail: "A file-native deck takes args.files instead of ops. To bring in a whole Claude Slides project (deck.json, slides/<id>.html and the pictures its /_blob/<id> sources name), zip it, upload it (create file, or file.large.begin/finalize) and pass args.import_file_id alone: it replaces the deck, keeping notes, builds and inline SVG, and stores the pictures in Dokki.",
+      summary: "Update a Slide deck with files / add_slides (ops for element decks).",
+      detail: 'Read slides first for the current state_hash and actual slide ids. A file-native deck takes args.files instead of ops: literal JSON path keys such as "slides/claim.html", with no extra quote characters or placeholder names. Send the full <section>; null only deletes an intended slide. validate_only:true checks without saving. To import a whole Claude Slides project, zip deck.json, slides/<id>.html and its pictures, upload it, then pass args.import_file_id alone: it replaces the deck, keeping notes, builds and inline SVG.',
       dry_run: true,
       ids: {
         resource_id: "required"
@@ -7718,14 +8013,10 @@ var catalog_generated_default = {
         resource_id: "<id>",
         args: {
           expected_state_hash: "<hash>",
-          add_slides: [
-            {
-              layout: "title-body",
-              content: {
-                title: "Claim"
-              }
-            }
-          ]
+          files: {
+            "slides/claim.html": '<section id="claim"><h2>Updated claim</h2></section>'
+          },
+          validate_only: true
         }
       },
       unknown_args: "refused",
@@ -7854,7 +8145,7 @@ var catalog_generated_default = {
                 }
               },
               files: {
-                description: `File-native decks (slides_read returns format:'files'): 'slides/<id>.html' → '<section id="<id>" …>' replaces or adds that slide, null removes it; 'deck.json' → the whole index (title, order, sections, faces, …).`,
+                description: 'File-native decks: JSON keys are literal paths, e.g. "slides/claim.html" (no extra quote characters). Use the actual id from slides_read, not a page number or placeholder. Values are a full <section> string, or null only to delete; "deck.json" takes the whole index. Validate first with validate_only:true.',
                 type: "object",
                 propertyNames: {
                   type: "string"
@@ -8666,6 +8957,7 @@ var catalog_generated_default = {
         "pr_number",
         "head_sha"
       ],
+      args_hint: "{ repository: string, pr_number: number, head_sha: string, title?: string, issue_ref?: string, reviewer_user_id?: string, reviewer_agent_id?: string }",
       example: {
         action: "review.request",
         workspace_id: "<workspace id>",
@@ -8755,6 +9047,7 @@ var catalog_generated_default = {
         "verdict",
         "summary"
       ],
+      args_hint: "{ request_message_id: string, head_sha: string, verdict: 'clean'|'changes_requested', summary: string }",
       example: {
         action: "review.verdict",
         workspace_id: "<workspace id>",
@@ -10200,6 +10493,7 @@ var catalog_generated_default = {
       required_args: [
         "toolkit"
       ],
+      args_hint: "{ toolkit: string }",
       example: {
         action: "authorize",
         args: {
@@ -10236,6 +10530,7 @@ var catalog_generated_default = {
       required_args: [
         "connection_id"
       ],
+      args_hint: "{ connection_id: string }",
       example: {
         action: "disconnect",
         args: {
@@ -12622,7 +12917,12 @@ var AGENT_OPERATIONS = [
         enum: ["javascript", "typescript"],
         description: "Handler language; default javascript."
       },
-      { name: "enabled", type: "boolean", description: "Enable immediately; default false." }
+      { name: "enabled", type: "boolean", description: "Enable immediately; default false." },
+      {
+        name: "confirm_outbound",
+        type: "boolean",
+        description: "Turn it on although steps reach outside the organization with nobody reviewing them first. Without it such a write answers 422 outbound_unreviewed with the steps."
+      }
     ]
   },
   {
@@ -12662,6 +12962,11 @@ var AGENT_OPERATIONS = [
         description: "Handler language."
       },
       { name: "enabled", type: "boolean", description: "Enable or disable." },
+      {
+        name: "confirm_outbound",
+        type: "boolean",
+        description: "Turn it on although steps reach outside the organization with nobody reviewing them first. Without it such a write answers 422 outbound_unreviewed with the steps."
+      },
       {
         name: "base_revision_id",
         type: "string",
@@ -12711,6 +13016,11 @@ var AGENT_OPERATIONS = [
         name: "draft",
         type: "json",
         description: "Fields to save before running (name, description, trigger_type, trigger_config, handler_code, handler_language, enabled); required with mode=save_and_run."
+      },
+      {
+        name: "confirm_outbound",
+        type: "boolean",
+        description: "With mode=save_and_run and a draft that turns it on: turn it on although steps reach outside the organization with nobody reviewing them first (else 422 outbound_unreviewed)."
       }
     ],
     idempotency: "supported"
@@ -14131,9 +14441,86 @@ var RESOURCE_OPERATIONS = [
         name: "values",
         type: "json",
         required: true,
-        description: "Non-empty object { <column id or column header>: value } of the cells to set."
+        description: "Non-empty object { <column id or column header>: value } of the cells to set. With if_version, keys are column keys (from `resource schema`) or column ids."
+      },
+      {
+        name: "if_version",
+        type: "integer",
+        description: "Write only if the row is still at this version (409 version_conflict otherwise). Takes the keyed path: column constraints answer 422 constraint_violation, and the response is { row: { id, version, values } }."
       }
     ]
+  },
+  {
+    command: ["resource", "row", "delete"],
+    method: "DELETE",
+    path: "/api/v1/resources/{resourceId}/rows/{rowRef}",
+    summary: "Delete one table row",
+    description: "Tables only; needs write. rowRef as for `resource row get`. Response: { deleted: <row id> }. 409 version_conflict when if_version no longer matches.",
+    scope: "content:write",
+    destructive: true,
+    query: [
+      {
+        name: "if_version",
+        type: "integer",
+        description: "Delete only if the row is still at this version."
+      }
+    ]
+  },
+  // app/api/v1/resources/[resourceId]/rows/route.ts
+  {
+    command: ["resource", "row", "insert"],
+    method: "POST",
+    path: "/api/v1/resources/{resourceId}/rows",
+    summary: "Add rows to a table, by column key",
+    description: "Tables only; needs write. Rows go after the table's last row, in order, in one transaction. A table still on the older storage is moved to the rows engine first (409 table_busy while someone has it open in the older editor). Column constraints (required, unique, options, type) answer 422 constraint_violation with { row_id, column, rule }; 429 rate_limited carries Retry-After. Response 201: { rows: [ { id, version, created_at, updated_at, values } ] }.",
+    scope: "content:write",
+    body: [
+      {
+        name: "rows",
+        type: "json",
+        required: true,
+        description: "Array of { values: { <column key>: value } }, at most 1000."
+      }
+    ]
+  },
+  // app/api/v1/resources/[resourceId]/rows/query/route.ts
+  {
+    command: ["resource", "row", "query"],
+    method: "POST",
+    path: "/api/v1/resources/{resourceId}/rows/query",
+    summary: "Query a table's rows: filter, sort, page, aggregate",
+    description: 'Tables only. Columns are named by key (see `resource schema`). where: { column, op, value } with op eq|ne|contains|gt|gte|lt|lte|in|empty|not_empty, or { and: [...] } / { or: [...] }; numbers compare as numbers; on multiSelect/tags/relation columns eq/in test membership. order: [{ column, dir: "asc"|"desc" }] (up to 5). limit 1-1000 (default 100). Page with cursor = the previous next_cursor (same order). count: "exact" adds the total. aggregate: { group_by: [keys], ops: [{ fn: count|sum|avg|min|max, column?, as? }] } answers { groups: [ { key, values } ] } instead of rows. Response: { rows: [ { id, version, created_at, updated_at, values } ], next_cursor, count? }.',
+    scope: "content:read",
+    body: [
+      { name: "select", flag: "columns", type: "json", description: "Array of column keys to return; default every column." },
+      { name: "where", type: "json", description: "Filter tree (see description)." },
+      { name: "order", type: "json", description: "Array of { column, dir }; default the table's own order." },
+      { name: "limit", type: "integer", description: "Rows per page, 1-1000. Default 100." },
+      { name: "cursor", type: "string", description: "next_cursor from the previous page." },
+      { name: "count", type: "string", enum: ["exact"], description: "exact: also return the total number of matching rows." },
+      { name: "aggregate", type: "json", description: "{ group_by, ops }: group and summarize instead of returning rows." }
+    ]
+  },
+  // app/api/v1/resources/[resourceId]/rows/batch/route.ts
+  {
+    command: ["resource", "row", "batch"],
+    method: "POST",
+    path: "/api/v1/resources/{resourceId}/rows/batch",
+    summary: "Insert, update and delete rows in one transaction",
+    description: 'Tables only; needs write. ops: [{ op: "insert", values } | { op: "update", row_id, values, if_version? } | { op: "delete", row_id, if_version? }], at most 1000, applied all or nothing. op_id on an op makes a resend a no-op. Errors as for `resource row insert`, plus 409 version_conflict. Response: { results: [ { op, row_id, version } ], rows: [ the inserted and updated rows ] }.',
+    scope: "content:write",
+    body: [
+      { name: "ops", type: "json", required: true, description: "Array of insert / update / delete ops (see description)." }
+    ]
+  },
+  // app/api/v1/resources/[resourceId]/schema/route.ts
+  {
+    command: ["resource", "schema"],
+    method: "GET",
+    path: "/api/v1/resources/{resourceId}/schema",
+    summary: "Read a table's columns and their keys",
+    description: "Tables only. Response: { table: { id, name }, columns: [ { key, id, name, type, options?, required, unique, default?, options_locked, relation?, read_only } ], system_fields }. key is the stable name code uses; it does not change when the column is renamed.",
+    scope: "content:read"
   },
   // app/api/v1/resources/[resourceId]/snapshots/route.ts
   {
@@ -15591,15 +15978,17 @@ var option = (flag, type, description, extra = {}) => ({ flag, in: "option", typ
 var BUILTINS = [
   {
     command: "auth login",
-    summary: "Verify an API key and save it to a profile",
-    usage: "dokki auth login [--api-key <-|@file>] [--base-url <url>] [--profile <name>]",
-    description: "Create a key in Dokki at Connect > AI tools (https://dokki.one/workspace/apps/connect?tab=ai), or with `dokki api-key create` using an existing key. A key belongs to one tenant: Personal, or a single organization. Without --api-key it asks for the key on the terminal, input hidden; `--api-key -` reads it from stdin and `--api-key @<file>` from a file, so it stays out of shell history. The key is checked against GET /api/v1/me on its site (--base-url, else DOKKI_BASE_URL, else the profile's, else https://dokki.one) before it is saved, with that site, to ~/.config/dokki/config.json (mode 0600).",
+    summary: "Sign in in the browser, or verify an API key you already have, and save it to a profile",
+    usage: "dokki auth login [--no-browser] [--with-key | --api-key <-|@file>] [--base-url <url>] [--profile <name>]",
+    description: "Without a key it signs in in the browser: it opens Dokki's approval page (/cli/login), where you pick the space the key is for (Personal, or one organization) and its role, and allow it; the browser hands a one-time code back to this command over http://127.0.0.1, and Dokki makes an API key named \"Dokki CLI · <this computer>\" — the same kind Connect > AI tools makes, listed and deletable there. Over SSH, or with --no-browser, open the printed address in any browser and paste the code it shows. --with-key asks for an existing key instead, input hidden; `--api-key -` reads one from stdin and `--api-key @<file>` from a file, so it stays out of shell history (in CI, where there is no browser, use one of these or DOKKI_API_KEY). The key is checked against GET /api/v1/me on its site (--base-url, else DOKKI_BASE_URL, else the profile's, else https://dokki.one) before it is saved, with that site, to ~/.config/dokki/config.json (mode 0600).",
     flags: [
       option(
-        "api-key",
-        "string",
-        "- to read the key from stdin, @<file> to read it from a file; omit it to be asked (hidden)."
+        "no-browser",
+        "boolean",
+        "Sign in from another computer's browser: print the address and paste the code it shows."
       ),
+      option("with-key", "boolean", "Paste an existing API key instead (asked for, hidden)."),
+      option("api-key", "string", "- to read the key from stdin, @<file> to read it from a file."),
       option("base-url", "string", "Dokki site; else DOKKI_BASE_URL, else https://dokki.one."),
       option("profile", "string", "Profile to save into; default the current profile."),
       option("no-verify", "boolean", "Save without calling the server.")
@@ -16127,7 +16516,7 @@ function overviewHelp() {
     "",
     "Start here",
     table([
-      ["dokki auth login", "Save your key, pasted hidden (create one at Connect > AI tools)."],
+      ["dokki auth login", "Sign in: allow it in the browser, and the key is saved for you."],
       ["dokki auth status", "Who the key belongs to, which host, which scopes."],
       ["dokki help guide", "The agent playbook: conventions and recipes."],
       ["dokki commands", "Every command, one line each (JSON)."],
@@ -17460,9 +17849,10 @@ async function main(argv, runtime) {
 
 // cli/src/runtime.ts
 import { execFile, spawn } from "node:child_process";
-import { randomUUID as randomUUID4 } from "node:crypto";
+import { randomBytes, randomUUID as randomUUID4 } from "node:crypto";
 import { promises as fs } from "node:fs";
-import { homedir } from "node:os";
+import { createServer } from "node:http";
+import { homedir, hostname } from "node:os";
 import { dirname } from "node:path";
 
 // cli/src/lines.ts
@@ -17501,6 +17891,73 @@ var LineDecoder = class {
 };
 
 // cli/src/runtime.ts
+function openUrlInBrowser(url) {
+  const [command, args] = process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", url]] : ["xdg-open", [url]];
+  return new Promise((resolve3) => {
+    execFile(command, args, { timeout: 5e3 }, (error) => resolve3(!error));
+  });
+}
+function startLoopback() {
+  return new Promise((resolve3, reject) => {
+    const queue = [];
+    let waiter = null;
+    const server = createServer((request, response) => {
+      const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      if (request.method !== "GET" || url.pathname !== "/callback") {
+        response.writeHead(404, { "content-type": "text/plain" }).end("Not found");
+        return;
+      }
+      let answered = false;
+      const callback = {
+        params: url.searchParams,
+        respond: (status, html) => {
+          if (answered) return;
+          answered = true;
+          response.writeHead(status, {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store"
+          }).end(html);
+        }
+      };
+      if (waiter) {
+        const next = waiter;
+        waiter = null;
+        next(callback);
+      } else {
+        queue.push(callback);
+      }
+    });
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        reject(new Error("loopback listener has no port"));
+        return;
+      }
+      resolve3({
+        port: address.port,
+        next: (timeoutMs) => {
+          const queued = queue.shift();
+          if (queued) return Promise.resolve(queued);
+          return new Promise((done) => {
+            const timer = setTimeout(() => {
+              waiter = null;
+              done(null);
+            }, timeoutMs);
+            waiter = (callback) => {
+              clearTimeout(timer);
+              done(callback);
+            };
+          });
+        },
+        close: () => new Promise((done) => {
+          server.closeAllConnections?.();
+          server.close(() => done());
+        })
+      });
+    });
+  });
+}
 var HiddenLineReader = class {
   value = "";
   escape = "none";
@@ -17658,7 +18115,11 @@ function nodeRuntime() {
       return () => clearTimeout(handle);
     },
     exit: (code) => process.exit(code),
-    promptSecret: promptSecretOnTerminal
+    promptSecret: promptSecretOnTerminal,
+    randomBytes: (size) => new Uint8Array(randomBytes(size)),
+    hostname: () => hostname(),
+    openUrl: openUrlInBrowser,
+    loopback: startLoopback
   };
 }
 

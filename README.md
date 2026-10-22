@@ -11,9 +11,11 @@
 
 **You lead. Agents do the work.** [Dokki](https://dokki.one) brings your team, agents and work into one workspace—from the first goal to shared, editable results.
 
-Bring your Dokki workspace into Claude Code. Search shared knowledge, create and edit documents, build tables and artifacts, and publish results without leaving your agent workflow. Claude Code can also join your Dokki team as an agent of its own, which people @mention and which answers while Claude Code is open.
+Bring your Dokki workspace into Claude Code. Search shared knowledge, create and edit documents, build tables, artifacts, Apps and Automations, and publish results without leaving your agent workflow. Claude Code can also join your Dokki team as an agent of its own, which people @mention and which answers while Claude Code is open.
 
-[Install](#install) · [Documentation](https://dokki.one/pub/docs) · [Answer @mentions](#answer-mentions-from-claude-code-the-dokki-channel) · [Local development](#local-development) · [MIT license](LICENSE)
+This plugin works inside your Dokki workspaces only. It does not act in your other accounts (GitHub, Slack, Gmail and so on) and does not run Dokki Agents; you set those up in the Dokki app.
+
+[Install](#install) · [Documentation](https://dokki.one/pub/docs) · [Answer @mentions](#answer-mentions-from-claude-code-the-dokki-channel) · [Local development](#local-development) · [Privacy policy](https://dokki.one/privacy) · [MIT license](LICENSE)
 
 You need Claude Code with plugin support and a [Dokki account](https://dokki.one). Hosted usage follows your [Dokki plan](https://dokki.one/plans).
 
@@ -36,7 +38,7 @@ the same is `claude plugin marketplace add Dokki-lab/dokki-plugin` and
 outside Anthropic's own). The Dokki channel arrived in version 1.5.0 of this plugin:
 `claude plugin list` shows which one you have.
 
-**First use.** The `dokki` server connects to `https://dokki.one/mcp/v2` and runs Dokki's sign-in
+**First use.** The `dokki` server connects to `https://dokki.one/mcp/v2/directory` and runs Dokki's sign-in
 in your browser — no key to paste. On Dokki's sign-in page, choose which Personal and organization
 spaces this connection can reach. These document tools act as **you**.
 
@@ -47,7 +49,7 @@ in `DOKKI_BASE_URL` — no trailing slash, and unset rather than empty when you 
 DOKKI_BASE_URL=https://staging.dokki.one claude
 ```
 
-Both servers follow it: the `dokki` server's address is `${DOKKI_BASE_URL:-https://dokki.one}/mcp/v2`
+Both servers follow it: the `dokki` server's address is `${DOKKI_BASE_URL:-https://dokki.one}/mcp/v2/directory`
 (Claude Code expands variables in a plugin's `.mcp.json`), and `dokki-channel` receives the variable
 too. Nothing in `.mcp.json` needs editing.
 
@@ -72,9 +74,10 @@ Open the returned document in Dokki to review and edit it. Publishing is a separ
 This plugin bundles:
 
 - **Two servers** (`.mcp.json`):
-  - **`dokki`** (`/mcp/v2`) — Dokki's hosted MCP, using the **facade** surface: high-level tools
-    (each takes an `action` + `args`) plus `preview_resource`, with discoverable actions.
-    Publishing, external integrations, Skills and Agents are built in.
+  - **`dokki`** (`/mcp/v2/directory`) — Dokki's hosted MCP, using the **facade** surface:
+    high-level tools (each takes an `action` + `args`) plus `preview_resource`, with discoverable
+    actions. Publishing and Skills are built in. Automations made or run through it can't call
+    connected apps, send email, start Agents or generate video.
   - **`dokki-channel`** (stdio, `bin/dokki.mjs agent channel`) — optional: makes a Claude Code
     session a Dokki **agent** that people can @mention in Dokki chats, and wakes it when they do.
     See [Answer @mentions from Claude Code](#answer-mentions-from-claude-code-the-dokki-channel).
@@ -93,8 +96,6 @@ The `dokki` facade tools:
 | `message` | a workspace channel for human confirmations & notifications |
 | `skills` | folder-backed Skills: draft, validate, publish, install, bind to an Agent |
 | `publish` | publish/unpublish resources to a public site + custom domains |
-| `connect` | **connect & use external integrations** (GitHub, Slack, Gmail, Notion, Google Workspace, Linear, …) through Dokki |
-| `agent` | manage and run your Dokki Agents (roster, teams, schedules); query and cancel delegated runs |
 | `preview_resource` | inline rendered preview of a doc/table/artifact |
 
 The facade is **self-teaching**: call a tool with no `action` to list its actions; a partial
@@ -105,25 +106,22 @@ action returns the subtree; missing args return a hint with an example. Dangerou
 | Skill | Command | Scope |
 |-------|---------|-------|
 | Entry / router | `/dokki:dokki <intent>` | Interprets intent, routes to the right skill, orchestrates multi-skill workflows |
-| Workspace | `/dokki:dokki-workspace` | Browse, search, organize, coordinate, connect — `find`, `edit resource.*`, `share`, `message`, `connect` (external integrations), upload |
+| Workspace | `/dokki:dokki-workspace` | Browse, search, organize, coordinate — `find`, `edit resource.*`, `share`, `message`, upload |
 | Document | `/dokki:dokki-document` | Rich-text docs and inline images — `create doc`, `read doc`, `edit doc.edit`/`doc.rewrite` |
 | Table | `/dokki:dokki-table` | Structured data — `create table`, `read table`, `edit table.edit` |
 | Artifact | `/dokki:dokki-artifact` | HTML or JSX artifacts, charts, interactive UI — `create artifact`, `edit artifact.*` |
 | Publish | `/dokki:dokki-publish` | Public sites & custom domains — `publish site/add/remove/domain.*` |
 | Automation | `/dokki:dokki-automation` | Versioned visual workflows — list/read/create/revise/run/history/delete |
 | App | `/dokki:dokki-app` | Multi-page Dokki Apps — Screens, reusable Components, data bound to a Table; validate, release, install |
-| Ad film | `/dokki:ad-film-production` | One-line brief → a generatable shot table: proposition, three-second hook, per-shot video prompts, continuity |
-| Sales call debrief | `/dokki:sales-call-debrief` | Spoken meeting recap → evidence-backed report with account history, stage/BANT, and only the material gaps |
 
 ## Authentication
 
 The `dokki` server supports three ways to sign in:
 
 1. **OAuth** (default) — nothing to configure; Dokki's `.well-known` discovery endpoints drive
-   the browser sign-in. Keep the URL as `/mcp/v2`; Org and workspace scope are selected on
-   Dokki's consent screen. Older OAuth connections created before scoped consent may only see
-   Personal workspaces until you reconnect. (External integrations connected via `connect` are
-   scoped to your user account.)
+   the browser sign-in. Keep the URL as `/mcp/v2/directory`; Org and workspace scope are selected
+   on Dokki's consent screen. Older OAuth connections created before scoped consent may only see
+   Personal workspaces until you reconnect.
 2. **API key** — set an `Authorization: Bearer dk_...` header if you prefer static credentials.
    A `dk_...` key is scoped to Personal or a single Org; use separate server entries/keys when
    you need multiple Org scopes:
@@ -132,18 +130,13 @@ The `dokki` server supports three ways to sign in:
      "mcpServers": {
        "dokki": {
          "type": "http",
-         "url": "https://dokki.one/mcp/v2",
+         "url": "https://dokki.one/mcp/v2/directory",
          "headers": { "Authorization": "Bearer dk_your_api_key_here" }
        }
      }
    }
    ```
 3. **Connector token** — workspace-scoped tokens for embedded/integration use.
-
-`https://dokki.one/api/mcp` remains as a compatibility alias for existing configurations and
-serves the same facade tools as `/mcp/v2`; it is not a separate flat surface. The fixed-Org
-`https://dokki.one/api/mcp/org/<orgId>` endpoint remains for older integrations. New
-configurations should always use `https://dokki.one/mcp/v2`.
 
 ## Answer @mentions from Claude Code (the Dokki channel)
 
@@ -199,11 +192,11 @@ choose **Claude Code**, give it a name, and press **Add**. Dokki then shows the 
 **once** — with, under **Hear messages in Claude Code**, the line that starts Claude Code as this
 agent, the key in it. Copy it now.
 
-Rather do it from a terminal? Sign in with your own Dokki key (Connect › AI tools) and let the
-Dokki CLI create the agent and save its key on this computer:
+Rather do it from a terminal? Sign in to Dokki as yourself (the first line opens your browser;
+allow it there) and let the Dokki CLI create the agent and save its key on this computer:
 
 ```bash
-npx -y @dokki-lab/cli auth login                  # paste your own key when asked; it stays hidden
+npx -y @dokki-lab/cli auth login                  # allow it in the browser it opens
 npx -y @dokki-lab/cli agent connect --name "Claude Code" --client claude-code
 ```
 
@@ -396,14 +389,14 @@ Try it:
 
 ```
 /dokki:dokki Write a PRD about rate limiting and publish it to our docs site
-/dokki:dokki Pull my open GitHub issues into a Dokki table
+/dokki:dokki-table Track this quarter's launches in a table with owner, date and status
 /dokki:dokki-document "API Guide"
 ```
 
 ## Self-hosting
 
 If you run your own Dokki instance, start Claude Code with `DOKKI_BASE_URL=<your origin>` in its
-environment (see [Install](#install)); the plugin then uses `<your origin>/mcp/v2` and the channel
+environment (see [Install](#install)); the plugin then uses `<your origin>/mcp/v2/directory` and the channel
 talks to the same server. Nothing in `.mcp.json` needs editing.
 
 ## License

@@ -13,7 +13,7 @@
     {
       "name": "dokki",
       "source": "./",
-      "description": "Connect Claude Code to Dokki: your team, agents and work in one workspace. Search knowledge, create and edit documents, tables and artifacts, and publish through MCP.",
+      "description": "Work in your Dokki workspaces from Claude Code: search shared knowledge, create and edit documents, tables, artifacts, Apps and Automations, and publish. Claude Code can also join your Dokki team as an agent people @mention.",
       "strict": true
     }
   ]

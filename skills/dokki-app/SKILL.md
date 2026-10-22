@@ -2,7 +2,7 @@
 name: dokki-app
 description: Build a multi-page Dokki App — Screens, reusable Components, and data bound to a workspace Table — then validate, release and install it. Use when one artifact is not enough and the result needs routes, a shared component library, or write access to workspace data. Starts with create app.
 argument-hint: <what-the-app-should-do>
-allowed-tools: mcp__dokki__create mcp__dokki__read mcp__dokki__edit mcp__dokki__publish
+allowed-tools: mcp__plugin_dokki_dokki__read
 ---
 
 # Dokki App — Screens, Components, and bound data

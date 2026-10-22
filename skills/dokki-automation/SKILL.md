@@ -1,11 +1,10 @@
 ---
 name: dokki-automation
 description: Create, inspect, revise, run, approve, and delete user-owned Personal or Organization Dokki Automations through MCP. Use for n8n-style WorkflowGraphV1 authoring, trigger/action node planning, revision-safe edits, approvals, and run history.
-allowed-tools: mcp__dokki__find mcp__dokki__read mcp__dokki__create mcp__dokki__edit
-license: Proprietary
+allowed-tools: mcp__plugin_dokki_dokki__find mcp__plugin_dokki_dokki__read
 metadata:
   author: Dokki
-  version: "1.4.11"
+  version: "1.4.12"
   protocol: dokki-automation@1
 ---
 
@@ -39,7 +38,7 @@ A Workspace is only an explicit target or event-source filter on a Dokki node. F
 
 ## Author `WorkflowGraphV1`
 
-Call `find automation.nodes` before authoring or revising node types you have not just read from the saved graph. Treat its `type`, `default_config`, `required_config_paths`, `runtime_support`, `input_schema` and `output_schema` fields as authoritative; do not reconstruct action-node types from memory. An `output_schema` marked `speculative` is a guess from the node's kind, not an observed shape; `ai.prompt` emits one scalar string with no fields; `action.dokki.read.table`'s output depends on its branch (`args.format` / `args.mode`): `format:'json'` gives typed row objects keyed by column display name (later duplicates gain `(2)`, `(3)` in definition order; ids remain in `columns[]` metadata); bind `rows[].<column>` to check each name. CSV carries text in `data`, and compact carries text in `markdown`. A branching node answers `selection_status`, `branches` (in the order the runtime tries them) and a `hint`; pass `node_config` to see one branch's `output_schema`.
+Call `find automation.nodes` before authoring or revising node types you have not just read from the saved graph. Treat its `type`, `default_config`, `required_config_paths`, `runtime_support`, `input_schema` and `output_schema` fields as authoritative; do not reconstruct action-node types from memory. An `output_schema` marked `speculative` is a guess from the node's kind, not an observed shape; `ai.prompt` emits one scalar string unless its `result_schema` declares an object of fields; `action.dokki.read.table`'s output depends on its branch (`args.format` / `args.mode`): `format:'json'` gives typed row objects keyed by column display name (later duplicates gain `(2)`, `(3)` in definition order; ids remain in `columns[]` metadata); bind `rows[].<column>` to check each name. CSV carries text in `data`, and compact carries text in `markdown`. A branching node answers `selection_status`, `branches` (in the order the runtime tries them) and a `hint`; pass `node_config` to see one branch's `output_schema`.
 
 Send the complete graph, not a partial node patch:
 
@@ -66,30 +65,18 @@ Every node needs a stable unique `id`, a supported `type`, `typeVersion:1`, a hu
 The catalog contains:
 
 - Triggers: `trigger.manual` (declares run-time values in `config.inputs[]` — `{ name, type, required, description, example }` — and the run validates `trigger_payload` against them), `trigger.schedule`, `trigger.webhook`, the legacy `trigger.event`, plus granular `trigger.dokki.<resource>.<event>` nodes for resources, documents, tables, artifacts, files, messages, and publishing
-- Actions: `action.add_tag`, `action.remove_tag`, `action.agent.dispatch` (queues an Agent; the run does not wait for its answer), plus every Dokki MCP capability as `action.dokki.<facade>.<action>`; preserve the facade/action/config emitted by the product catalog
-- Hidden, unreleased Hire: `action.hire` (see the first-version limits below)
+- Actions: `action.add_tag`, `action.remove_tag`, plus every Dokki MCP capability this connection serves as `action.dokki.<facade>.<action>`; preserve the facade/action/config emitted by the product catalog. Steps that reach connected apps, send email, hire or start Agents, or generate video are refused through this plugin; the person adds those in the Dokki app.
 - Conditions: `condition.expression` (edges leave from the `true` / `false` handles) and `condition.switch` (one handle per case, `default` when none matched)
 - Flow: `transform.code`, `transform.convert` (one explicit conversion by `operation`: `parse_json`, `parse_csv`, `to_json`, `to_csv`, `markdown_to_html`, `html_to_text`; `input` is a template or binding; strings stay strings, a malformed input fails the node), `flow.parallel` + `flow.join` (branches run concurrently up to `max_concurrency`; a node with two or more inputs must be a join), `flow.for_each`, `flow.while`, `flow.retry`, `flow.catch` (from an upstream error handle), `flow.delay`, `flow.wait_event` (durable suspend, `runtime_support: pause_required`), `flow.call_workflow` (pins a revision), `flow.end`
-- AI: `ai.prompt`, `ai.agent_task` (hidden; requires org policy `automation.agent_task`)
-- Media: `media.image.generate`, `media.video.generate` (one generated file per item, saved in the folder `parent_id` names; batch summary output only, `items`/`succeeded`/`failed`)
+- AI: `ai.prompt`
+- Media: `media.image.generate` (one generated file per item, saved in the folder `parent_id` names; batch summary output only, `items`/`succeeded`/`failed`)
 - Human: `human.work_item`, `human.review` (rolling out behind feature flag `automation_human_review_v1`; while off, a write that adds it is refused with `human_review_not_enabled`)
 
 | Node | Runtime contract |
 |---|---|
-| `ai.agent_task` | Dispatch an isolated Agent task and wait for validated `result` and `artifacts`; route `success` or `error`. Configure `agent_id`, `task`, `input`, `result_schema` using ContractSchema, and `limits`. |
 | `human.review` | Freeze a snapshot of `subject`, assign ONE reviewer (`assignee_user_id`: an org member, or the owner in a Personal Automation), optional `form` fields and `deadline_hours` (1–720); routes `approved` / `rejected` / `expired` (all three must be connected; `request_changes` is reserved). Only nodes on `approved` may read `approved_subject` / `form_data`. The assignee decides in Dokki (Needs you); MCP `decide_automation_approval` refuses review requests. |
 
 Use exactly one trigger. Connect every non-trigger node to it, directly or indirectly. Keep the graph acyclic. Put event, schedule, resource, prompt, expression, code, tag, MCP arguments, or work-item settings in `config`; do not encode operational settings into labels. Optional `stages: [{id, name, nodeIds}]` group the canvas and never change execution.
-
-## Hire Agent — unreleased first version
-
-`action.hire` is hidden from the node library pending release verification. Its presence in this catalog does not mean the feature is enabled or deployed; do not offer it as generally available or bypass the rollout gate.
-
-The first version supports only a root workflow buying a fixed-price `hosted_agent` service. The owner selects a fixed payer Agent, listing, confirmed price and credit cap; trigger data and bindings cannot replace those commercial terms or increase the cap. A price change requires explicit confirmation. Delivery and manual-review timeouts are separate, fixed at admission and preserved across retries.
-
-Request exactly one text deliverable: `{name:"report", kind:"text"}`. Other names, multiple deliverables and file results are unsupported. A resource ID does not freeze file bytes. Nested workflows and paid node tests are refused; mock node tests never admit an order or debit credits.
-
-The workflow durably waits for delivery and a human payer-side decision. It succeeds only after manual acceptance and settlement; downstream nodes receive the accepted text snapshot, `engagement_id`, `listing_id`, `settled_credits` and `accepted_at`. A queued dispatch, provider completion or unreviewed report is not success. Canceling or timing out the workflow does not prove the supplier stopped or that a refund completed.
 
 ### Runtime limits
 
@@ -109,7 +96,7 @@ A wait longer than 60 s is a chain of `flow.delay` nodes of at most 60000 each, 
 
 ### Data between nodes
 
-A config string may contain `{{path}}`. The roots are `input` (the upstream node's output), `trigger.type`, `trigger.payload.*`, `nodes.<node id>.output`, and `workflow.workspace_id` / `organization_id` / `execution_id`; any other first segment is read as a **node id**, so `{{summary.title}}` means `{{nodes.summary.output.title}}` and a root always wins over a node of the same name. A string that is exactly one template yields the raw value; inside other text it is stringified; **a path that reaches nothing fails silently** — unfilled alone, an empty string inside text — and `ai.prompt` emits one string, so `{{summary.text}}` reaches nothing while `{{summary}}` is the whole answer. An edge may carry `bindings` (source node + path → target config path); the validator accepts only paths the upstream `output_schema` has, and a scalar output is the empty path. A node you save may declare its own `outputSchema: { fields: [{ path, label, type }] }` so downstream steps can bind to what a `transform.code` returns.
+A config string may contain `{{path}}`. The roots are `input` (the upstream node's output), `trigger.type`, `trigger.payload.*`, `nodes.<node id>.output`, and `workflow.workspace_id` / `organization_id` / `execution_id`; any other first segment is read as a **node id**, so `{{summary.title}}` means `{{nodes.summary.output.title}}` and a root always wins over a node of the same name. A string that is exactly one template yields the raw value; inside other text it is stringified; **a path that reaches nothing fails silently** — unfilled alone, an empty string inside text — and an `ai.prompt` without `result_schema` emits one string, so `{{summary.text}}` reaches nothing while `{{summary}}` is the whole answer. An edge may carry `bindings` (source node + path → target config path); the validator accepts only paths the upstream `output_schema` has, and a scalar output is the empty path. A node you save may declare its own `outputSchema: { fields: [{ path, label, type }] }` so downstream steps can bind to what a `transform.code` returns.
 
 ## Create safely
 

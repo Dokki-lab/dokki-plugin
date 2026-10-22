@@ -2,7 +2,7 @@
 name: dokki-document
 description: Create new documents or edit existing ones using compact node-based operations. Use for writing and modifying rich-text content.
 argument-hint: <title-or-resource-id> [instruction]
-allowed-tools: mcp__dokki__create mcp__dokki__read mcp__dokki__edit
+allowed-tools: mcp__plugin_dokki_dokki__read
 ---
 
 # Dokki Document — Create & Edit
