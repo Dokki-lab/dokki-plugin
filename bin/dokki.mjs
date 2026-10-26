@@ -3742,7 +3742,7 @@ var catalog_generated_default = {
       facade: "read",
       action: "table",
       summary: "Read a table's rows; filter, sort, page or aggregate server-side.",
-      detail: "Optional args: mode:'schema' (column names/ids, how many rows fill each, and each column's distinct values — read this first on a table whose shape you don't know), where[{column,op,value}] where op is one of eq|ne|contains|gt|gte|lt|lte|in|empty|not_empty (an op or column it cannot resolve is a hard error, never a silent full-table result), where_match, columns (projection), sort, page/page_size (default 20; csv/json: all), aggregate{group_by (one column ref, or an array of refs for a cross-tab), ops:[{fn:count|sum|avg|min|max,column?,as?}]} for server-side GROUP BY so you don't page the whole table to count/sum it. where and aggregate compose: WHERE runs first, the aggregate runs over what it matched. format:'json' returns typed row objects keyed by display name; later duplicates gain (2), (3) in definition order, with ids in columns metadata only. format:'csv' writes RFC 4180 text and, without page_size, holds every matched row.",
+      detail: "Optional args: mode:'schema' (column names/ids, how many rows fill each, and each column's distinct values — read this first on a table whose shape you don't know), where[{column,op,value}] where op is one of eq|ne|contains|gt|gte|lt|lte|in|empty|not_empty (an op or column it cannot resolve is a hard error, never a silent full-table result), where_match, columns (projection), sort, page/page_size (default 20; csv/json: all), aggregate{group_by (one column ref, or an array of refs for a cross-tab), ops:[{fn:count|sum|avg|min|max,column?,as?}]} for server-side GROUP BY so you don't page the whole table to count/sum it. where and aggregate compose: WHERE runs first, the aggregate runs over what it matched. format:'json' returns typed row objects keyed by display name; later duplicates gain (2), (3) in definition order, with column ids in columns metadata and row_metadata[].id aligned one-to-one with rows for subsequent edits. format:'csv' writes RFC 4180 text and, without page_size, holds every matched row.",
       ids: {
         resource_id: "required"
       },
@@ -4487,15 +4487,11 @@ var catalog_generated_default = {
               },
               org_id: {
                 description: "Organization ID to create inside. Omit/null for Personal.",
-                anyOf: [
-                  {
-                    type: "string"
-                  },
-                  {
-                    type: "null"
-                  }
-                ],
-                id_space: "organization"
+                id_space: "organization",
+                type: [
+                  "string",
+                  "null"
+                ]
               }
             },
             required: [
@@ -5811,15 +5807,11 @@ var catalog_generated_default = {
           },
           parent_id: {
             description: "New parent resource id. Pass null for workspace root; omission keeps the current parent. Preferred over new_parent_path.",
-            anyOf: [
-              {
-                type: "string"
-              },
-              {
-                type: "null"
-              }
-            ],
             resource_kind: "folder",
+            type: [
+              "string",
+              "null"
+            ],
             id_space: "resource"
           },
           insert_after_id: {
@@ -7820,13 +7812,9 @@ var catalog_generated_default = {
                   type: "string"
                 },
                 additionalProperties: {
-                  anyOf: [
-                    {
-                      type: "string"
-                    },
-                    {
-                      type: "null"
-                    }
+                  type: [
+                    "string",
+                    "null"
                   ]
                 }
               },
@@ -8461,13 +8449,9 @@ var catalog_generated_default = {
                   type: "string"
                 },
                 additionalProperties: {
-                  anyOf: [
-                    {
-                      type: "string"
-                    },
-                    {
-                      type: "null"
-                    }
+                  type: [
+                    "string",
+                    "null"
                   ]
                 }
               },
@@ -8697,19 +8681,27 @@ var catalog_generated_default = {
     {
       facade: "share",
       action: "person",
-      summary: "Share a resource with a member, by name, e-mail or id, at a role.",
-      detail: "args.person the way you were told: a name or nickname (张三, Alex; Traditional or pinyin too), an e-mail or a user id — members of the resource's organization only (share.user takes any account's e-mail). A name that fits several people returns the candidates instead of sharing.",
+      summary: "Share a resource with members, or a member group, at a role.",
+      detail: "args.person the way you were told: a name or nickname (张三, Alex; Traditional or pinyin too), an e-mail or a user id — members of the resource's organization only (share.user takes any account's e-mail). args.people shares with several members at once. args.group_id shares with a member group you belong to. A name that fits several people returns the candidates instead of sharing. In an Automation each person is told, as the share dialog tells them.",
+      dry_run: true,
       ids: {
         resource_id: "required"
       },
-      required_args: [
-        "person"
+      required_any_args: [
+        [
+          "person",
+          "people",
+          "group_id"
+        ]
       ],
       example: {
         action: "person",
         resource_id: "<id>",
         args: {
-          person: "张三",
+          people: [
+            "张三",
+            "Alex"
+          ],
           role: "viewer"
         }
       },
@@ -8730,6 +8722,22 @@ var catalog_generated_default = {
                 type: "string",
                 maxLength: 320
               },
+              people: {
+                description: "Several members of the resource's organization at once, each by name, nickname, e-mail or user id (as person).",
+                maxItems: 20,
+                type: "array",
+                items: {
+                  type: "string",
+                  minLength: 1,
+                  maxLength: 320
+                }
+              },
+              group_id: {
+                description: "A member group of the resource's organization to share with, one you belong to (the share dialog's groups).",
+                type: "string",
+                format: "uuid",
+                pattern: "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
               role: {
                 description: 'Role to grant (default: "viewer"). Used with email or person.',
                 type: "string",
@@ -8741,8 +8749,26 @@ var catalog_generated_default = {
                 ]
               }
             },
-            required: [
-              "person"
+            allOf: [
+              {
+                anyOf: [
+                  {
+                    required: [
+                      "person"
+                    ]
+                  },
+                  {
+                    required: [
+                      "people"
+                    ]
+                  },
+                  {
+                    required: [
+                      "group_id"
+                    ]
+                  }
+                ]
+              }
             ]
           }
         },
@@ -8848,7 +8874,7 @@ var catalog_generated_default = {
       required_args: [
         "content"
       ],
-      args_hint: "{ content: string (required — 1–20000 chars, posted verbatim), require_response?: boolean (true when you are asking a human to confirm or answer before you continue), thread_root_id?: string (post as a reply in the Thread under that channel message instead of the main stream) }",
+      args_hint: "{ content: string (required — 1–20000 chars, posted verbatim), require_response?: boolean (true when you are asking a human to confirm or answer before you continue), thread_root_id?: string (post as a reply in the Thread under that channel message instead of the main stream), mentions?: string[] (user ids of channel members to @-mention; they are notified) }",
       example: {
         action: "send",
         workspace_id: "<workspace id>",
@@ -8885,6 +8911,17 @@ var catalog_generated_default = {
                 format: "uuid",
                 pattern: "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                 id_space: "message"
+              },
+              mentions: {
+                description: "People in the chat to @-mention, by user id; they are notified. Their @Name is added to the text when it is not there already.",
+                maxItems: 10,
+                type: "array",
+                items: {
+                  type: "string",
+                  format: "uuid",
+                  pattern: "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                id_space: "user"
               }
             },
             required: [
@@ -9372,13 +9409,9 @@ var catalog_generated_default = {
               },
               approved_capabilities: {},
               expected_release_id: {
-                anyOf: [
-                  {
-                    type: "string"
-                  },
-                  {
-                    type: "null"
-                  }
+                type: [
+                  "string",
+                  "null"
                 ]
               }
             },
@@ -10581,6 +10614,20 @@ var catalog_generated_default = {
               toolkit: {
                 description: "Only this app's tools",
                 type: "string"
+              },
+              actions: {
+                description: "With toolkit: list the app's own actions (the ones connect.call runs) instead of the session's tools",
+                type: "boolean"
+              },
+              query: {
+                description: "With actions: match an action's name or description",
+                type: "string"
+              },
+              limit: {
+                description: "With actions: at most this many (default 50)",
+                type: "integer",
+                minimum: 1,
+                maximum: 200
               }
             }
           }
@@ -14489,10 +14536,11 @@ var RESOURCE_OPERATIONS = [
     method: "POST",
     path: "/api/v1/resources/{resourceId}/rows/query",
     summary: "Query a table's rows: filter, sort, page, aggregate",
-    description: 'Tables only. Columns are named by key (see `resource schema`). where: { column, op, value } with op eq|ne|contains|gt|gte|lt|lte|in|empty|not_empty, or { and: [...] } / { or: [...] }; numbers compare as numbers; on multiSelect/tags/relation columns eq/in test membership. order: [{ column, dir: "asc"|"desc" }] (up to 5). limit 1-1000 (default 100). Page with cursor = the previous next_cursor (same order). count: "exact" adds the total. aggregate: { group_by: [keys], ops: [{ fn: count|sum|avg|min|max, column?, as? }] } answers { groups: [ { key, values } ] } instead of rows. Response: { rows: [ { id, version, created_at, updated_at, values } ], next_cursor, count? }.',
+    description: 'Tables only. Columns are named by key (see `resource schema`). where: { column, op, value } with op eq|ne|contains|gt|gte|lt|lte|in|empty|not_empty, or { and: [...] } / { or: [...] }; numbers compare as numbers; on multiSelect/tags/relation columns eq/in test membership. order: [{ column, dir: "asc"|"desc" }] (up to 5). limit 1-1000 (default 100). Page with cursor = the previous next_cursor (same order). count: "exact" adds the total. aggregate: { group_by: [keys], ops: [{ fn: count|sum|avg|min|max, column?, as? }] } answers { groups: [ { key, values } ] } instead of rows. include: { "<relation column key>": { select: [<linked column keys>] } } replaces that column’s row ids with the linked rows themselves, one level, at most 50 per row: values["<key>"] = [ { id, values } ]. A linked table the caller cannot read contributes an empty array; a linked table that no longer exists is a 400 invalid_include. Response: { rows: [ { id, version, created_at, updated_at, values } ], next_cursor, count? }.',
     scope: "content:read",
     body: [
       { name: "select", flag: "columns", type: "json", description: "Array of column keys to return; default every column." },
+      { name: "include", type: "json", description: "{ <relation column key>: { select: [<linked column keys>] } }: the linked rows themselves, one level, at most 50 per row." },
       { name: "where", type: "json", description: "Filter tree (see description)." },
       { name: "order", type: "json", description: "Array of { column, dir }; default the table's own order." },
       { name: "limit", type: "integer", description: "Rows per page, 1-1000. Default 100." },
@@ -14507,20 +14555,51 @@ var RESOURCE_OPERATIONS = [
     method: "POST",
     path: "/api/v1/resources/{resourceId}/rows/batch",
     summary: "Insert, update and delete rows in one transaction",
-    description: 'Tables only; needs write. ops: [{ op: "insert", values } | { op: "update", row_id, values, if_version? } | { op: "delete", row_id, if_version? }], at most 1000, applied all or nothing. op_id on an op makes a resend a no-op. Errors as for `resource row insert`, plus 409 version_conflict. Response: { results: [ { op, row_id, version } ], rows: [ the inserted and updated rows ] }.',
+    description: 'Tables only; needs write. ops: [{ op: "insert", values } | { op: "update", row_id, values, if_version? } | { op: "delete", row_id, if_version? } | { op: "link", row_id, column, target_row_ids }], at most 1000, applied all or nothing. op_id on an op makes a resend a no-op. `link` replaces one relation cell’s linked rows (column is the relation column key, target_row_ids the rows it names); a link over the column’s max_links is a 400 link_limit naming the column. Errors as for `resource row insert`, plus 409 version_conflict. Response: { results: [ { op, row_id, version } ], rows: [ the inserted and updated rows ] }.',
     scope: "content:write",
     body: [
-      { name: "ops", type: "json", required: true, description: "Array of insert / update / delete ops (see description)." }
+      { name: "ops", type: "json", required: true, description: "Array of insert / update / delete / link ops (see description)." }
     ]
   },
   // app/api/v1/resources/[resourceId]/schema/route.ts
   {
-    command: ["resource", "schema"],
+    command: ["resource", "schema", "get"],
     method: "GET",
     path: "/api/v1/resources/{resourceId}/schema",
     summary: "Read a table's columns and their keys",
-    description: "Tables only. Response: { table: { id, name }, columns: [ { key, id, name, type, options?, required, unique, default?, options_locked, relation?, read_only } ], system_fields }. key is the stable name code uses; it does not change when the column is renamed.",
+    description: "Tables only. Response: { table: { id, name }, columns: [ { key, id, name, type, options?, required, unique, default?, options_locked, relation?, read_only } ], columns_version, system_fields }. key is the stable name code uses; it does not change when the column is renamed. columns_version is what `resource schema update` --expected-version pins.",
     scope: "content:read"
+  },
+  {
+    command: ["resource", "schema", "update"],
+    method: "PATCH",
+    path: "/api/v1/resources/{resourceId}/schema",
+    summary: "Add, change or remove a table's columns and their rules",
+    description: "Tables only, one write: every change lands together or none does. Columns are named by key (or id). Turning a rule on checks the rows the table already has (rows with nothing in them are skipped) and answers 422 constraint_violation with how many rows break it; not_valid: true skips that check. A removed column's cells go with it. Linked-record and lookup columns are made in the table; here they can only be renamed (name, key) or removed. Response: the schema as `resource schema get` returns it.",
+    scope: "content:write",
+    destructive: true,
+    body: [
+      {
+        name: "add",
+        type: "json",
+        description: `Columns to add: [{ name, type?, key?, options?, required?, unique?, default?, options_locked?, not_valid?, after? }]. type is one of text, number, boolean, date, dateTime, dateRange, select, multiSelect, tags, member, url, email, scm (default text); key defaults to one made from the name; after is the key of the column to place it behind (default: last).`
+      },
+      {
+        name: "update",
+        type: "json",
+        description: "Columns to change: [{ column, name?, type?, key?, options?, required?, unique?, default?, options_locked?, not_valid? }]. column is the key (or id). A rule set to false and default: null remove them. A new key breaks code that uses the old one."
+      },
+      {
+        name: "remove",
+        type: "json",
+        description: "Keys (or ids) of columns to remove, with their cells."
+      },
+      {
+        name: "expected_version",
+        type: "number",
+        description: "columns_version from `resource schema get`; a table changed since answers 409 schema_conflict. Without it the change is made on the columns as they are."
+      }
+    ]
   },
   // app/api/v1/resources/[resourceId]/snapshots/route.ts
   {
@@ -14712,8 +14791,8 @@ var RESOURCE_OPERATIONS = [
 // cli/src/rest/specs/tasks.ts
 var TASK_VIEWS = ["for_me", "from_me", "done"];
 var TASK_STATUSES = ["open", "done", "declined", "withdrawn"];
-var TASK_ACTIONS = ["update", "reassign", "remind", "withdraw"];
-var TASK_SHAPE = "A task is { id, code (the 4-hex short code a person types in IM), title, details, done_when, fields [{key,label,type,options?,required?}], links, status (open|done|declined|withdrawn), due_at, overdue, assignee {id,name}, requester {kind,user,agent,client}, someone_waiting, waiting_label, result {fields?,note?}, decline_reason, resolved_by, resolved_at, resolved_via, created_at, updated_at }.";
+var TASK_ACTIONS = ["update", "reassign", "prioritize", "remind", "withdraw"];
+var TASK_SHAPE = "A task is { id, code (the 4-hex short code a person types in IM), title, details, done_when, fields [{key,label,type,options?,required?}], links, status (open|done|declined|withdrawn), due_at, priority (urgent|high|normal|low), priority_reason, overdue, assignee {id,name}, requester {kind,user,agent,client}, someone_waiting, waiting_label, result {fields?,note?}, decline_reason, resolved_by, resolved_at, resolved_via, created_at, updated_at }.";
 var TASK_OPERATIONS = [
   {
     command: ["task", "list"],
@@ -14762,6 +14841,12 @@ var TASK_OPERATIONS = [
       },
       { name: "due_at", type: "string", description: "ISO 8601 date-time it is needed by." },
       {
+        name: "priority",
+        type: "string",
+        enum: ["urgent", "high", "normal", "low"],
+        description: "Where it should sit on their list (default normal)."
+      },
+      {
         name: "fields",
         type: "json",
         description: 'Values to hand back when done: [{"label","type":"text|choice|file|link","options"?,"required"?}] (max 12).'
@@ -14791,7 +14876,7 @@ var TASK_OPERATIONS = [
     method: "PATCH",
     path: "/api/v1/tasks/{taskId}",
     summary: "Change, reassign, remind or withdraw a task",
-    description: "action=update (the requester; title, details, done_when, due_at — JSON null clears due_at), reassign (either party; assignee), remind (the requester; at most once an hour, else 429 reminded_recently), withdraw (the requester; reason). A resolved task answers 409 already_resolved. Answers { task }. Shortcuts: `dokki task cancel|remind`.",
+    description: "action=update (the requester; title, details, done_when, due_at — JSON null clears due_at), reassign (either party; assignee), prioritize (either party, while open; priority urgent|high|normal|low, reason — the assignee's order of their own list), remind (the requester; at most once an hour, else 429 reminded_recently), withdraw (the requester; reason). A resolved task answers 409 already_resolved. Answers { task }. Shortcuts: `dokki task cancel|remind`.",
     scope: "work_item:write",
     body: [
       {
@@ -14810,7 +14895,17 @@ var TASK_OPERATIONS = [
         description: "update: new due time; null clears it."
       },
       { name: "assignee", type: "string", description: "reassign: me, a user id or an e-mail." },
-      { name: "reason", type: "string", description: "withdraw: told to the assignee." }
+      {
+        name: "priority",
+        type: "string",
+        enum: ["urgent", "high", "normal", "low"],
+        description: "prioritize: where it sits on the assignee's list."
+      },
+      {
+        name: "reason",
+        type: "string",
+        description: "withdraw: told to the assignee. prioritize: one line on why."
+      }
     ]
   },
   {
@@ -16047,6 +16142,17 @@ var BUILTINS = [
     ]
   },
   {
+    command: "gen types",
+    summary: "Write TypeScript types for @dokki-lab/sdk from your tables",
+    usage: "dokki gen types (--workspace <id> | --table <id>...) [--out <file>]",
+    description: "Reads each table's columns (GET /api/v1/resources/<id>/schema) and writes `export const tables` (name -> id, for createClient({ tables })) and `export type Database` (each table's Row, Insert and Update by column key, for createClient<Database>()). --workspace takes every table in a workspace you can see; --table one table (repeatable). Two tables with the same name are written as \"name~<id prefix>\". A table still on the older storage is moved to the new one when you can edit it, as any API read does; one you can only read is left out (listed under skipped). Without --out the file is printed. Run it again after a table's columns change.",
+    flags: [
+      option("workspace", "string", "Every table in this workspace."),
+      option("table", "string", "One table by id; repeat for more."),
+      option("out", "string", "File to write, e.g. dokki.types.ts; printed when absent.")
+    ]
+  },
+  {
     command: "task wait",
     summary: "Wait until a person finishes a task; print it, or exit 13 if declined",
     usage: "dokki task wait <task-id> [--wait-timeout <s>] [--poll-interval <s>]",
@@ -16927,6 +17033,174 @@ async function runMcp(ctx, sub, flags) {
 }
 var MCP_BOOLEAN_FLAGS = /* @__PURE__ */ new Set(["names"]);
 
+// cli/src/commands/gen.ts
+import { isAbsolute, join as join4 } from "node:path";
+var GEN_TYPES_FLAGS = ["workspace", "table", "out"];
+var SYSTEM_ROW = [
+  ["id", "string"],
+  ["version", "number"],
+  ["created_at", "string"],
+  ["updated_at", "string"],
+  ["created_by", "string | null"],
+  ["updated_by", "string | null"]
+];
+var quote = (text) => JSON.stringify(text);
+function union(options) {
+  return options && options.length > 0 ? options.map(quote).join(" | ") : null;
+}
+function valueType(column) {
+  const listed = column.options_locked ? union(column.options) : null;
+  switch (column.type) {
+    case "number":
+      return "number";
+    case "boolean":
+      return "boolean";
+    case "dateTime":
+      return "{ version: 1; instant: string; timeZone: string }";
+    case "dateRange":
+      return "{ startDate: string; endDate: string }";
+    case "select":
+      return listed ?? "string";
+    case "multiSelect":
+      return `Array<${listed ?? "string"}>`;
+    case "tags":
+    case "scm":
+    case "relation":
+      return "string[]";
+    case "lookup":
+      return "unknown";
+    default:
+      return "string";
+  }
+}
+function emptyType(column) {
+  switch (column.type) {
+    case "number":
+    case "date":
+    case "dateTime":
+    case "dateRange":
+      return "null";
+    case "select":
+      return column.options_locked && union(column.options) ? '""' : null;
+    default:
+      return null;
+  }
+}
+function cellType(column) {
+  const value = valueType(column);
+  const empty = column.required ? null : emptyType(column);
+  return empty ? `${value} | ${empty}` : value;
+}
+function tableNames(tables) {
+  const count = /* @__PURE__ */ new Map();
+  for (const t of tables) count.set(t.table.name, (count.get(t.table.name) ?? 0) + 1);
+  return tables.map((t) => {
+    if ((count.get(t.table.name) ?? 0) < 2) return t.table.name;
+    const siblings = tables.filter((o) => o.table.name === t.table.name && o.table.id !== t.table.id);
+    let length = 4;
+    while (siblings.some((o) => o.table.id.startsWith(t.table.id.slice(0, length))) && length < t.table.id.length) {
+      length += 4;
+    }
+    return `${t.table.name}~${t.table.id.slice(0, length)}`;
+  });
+}
+function renderTypes(tables, source) {
+  const names = tableNames(tables);
+  const lines = [
+    `// Generated by \`dokki gen types\` from ${source}. Do not edit; run it again after columns change.`,
+    "",
+    "export const tables = {",
+    ...tables.map((t, i) => `  ${quote(names[i])}: ${quote(t.table.id)},`),
+    "} as const",
+    "",
+    "export type Database = {",
+    "  tables: {"
+  ];
+  tables.forEach((t, i) => {
+    const writable = t.columns.filter((c) => !c.read_only);
+    lines.push(`    ${quote(names[i])}: {`);
+    lines.push(`      id: ${quote(t.table.id)}`);
+    lines.push("      Row: {");
+    for (const [key, type] of SYSTEM_ROW) lines.push(`        ${key}: ${type}`);
+    for (const c of t.columns) lines.push(`        ${quote(c.key)}: ${cellType(c)}`);
+    lines.push("      }");
+    lines.push("      Insert: {");
+    for (const c of writable) {
+      const optional = !c.required || c.default !== void 0;
+      lines.push(`        ${quote(c.key)}${optional ? "?" : ""}: ${cellType(c)}`);
+    }
+    lines.push("      }");
+    lines.push("      Update: {");
+    for (const c of writable) lines.push(`        ${quote(c.key)}?: ${cellType(c)}`);
+    lines.push("      }");
+    lines.push("    }");
+  });
+  lines.push("  }", "}", "");
+  return lines.join("\n");
+}
+async function workspaceTables(ctx, workspaceId) {
+  const client = await ctx.client();
+  const ids = [];
+  for (let offset = 0; ; offset += 500) {
+    const response = await client.send({
+      method: "GET",
+      path: `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/resources`,
+      query: { limit: "500", offset: String(offset) }
+    });
+    const page = response.data ?? {};
+    for (const resource of page.resources ?? []) if (resource.type === "table") ids.push(resource.id);
+    if (!page.page?.has_more) return ids;
+  }
+}
+async function runGen(ctx, sub, flags) {
+  if (sub !== "types") throw usageError("Usage: dokki gen types (--workspace <id> | --table <id>...) [--out <file>]");
+  assertKnownFlags(flags, GEN_TYPES_FLAGS, "dokki gen types");
+  const workspaceId = lastValue(flags, "workspace");
+  const tableIds = flags.values.get("table") ?? [];
+  if (!workspaceId === (tableIds.length === 0)) {
+    throw usageError("Pass --workspace <id>, or one --table <id> per table (not both)");
+  }
+  if (ctx.globals.dryRun) {
+    printResult(
+      ctx.runtime,
+      {
+        dry_run: true,
+        reads: workspaceId ? [`GET /api/v1/workspaces/${workspaceId}/resources`, "GET /api/v1/resources/<each table>/schema"] : tableIds.map((id) => `GET /api/v1/resources/${id}/schema`)
+      },
+      ctx.previewOutput
+    );
+    return EXIT.ok;
+  }
+  const ids = workspaceId ? await workspaceTables(ctx, workspaceId) : tableIds;
+  const client = await ctx.client();
+  const schemas = [];
+  const skipped = [];
+  for (const id of ids) {
+    try {
+      const response = await client.send({ method: "GET", path: `/api/v1/resources/${encodeURIComponent(id)}/schema` });
+      schemas.push(response.data);
+    } catch (error) {
+      if (workspaceId && error instanceof CliError && error.code === "table_not_ready") {
+        skipped.push({ id, reason: error.message });
+        continue;
+      }
+      throw error;
+    }
+  }
+  const text = renderTypes(schemas, (await ctx.target()).baseUrl);
+  const out = lastValue(flags, "out");
+  if (!out) {
+    ctx.runtime.stdout(text);
+    if (skipped.length > 0) ctx.runtime.stderr(`${JSON.stringify({ skipped })}
+`);
+    return EXIT.ok;
+  }
+  const path = isAbsolute(out) ? out : join4(ctx.runtime.cwd, out);
+  await ctx.runtime.writeFile(path, text);
+  printResult(ctx.runtime, { written: path, tables: schemas.length, ...skipped.length > 0 ? { skipped } : {} }, ctx.output);
+  return EXIT.ok;
+}
+
 // cli/src/commands/tasks.ts
 var TASK_WAIT_FLAGS = ["poll-interval", "wait-timeout"];
 var TASK_DONE_FLAGS = ["field", "fields", "note"];
@@ -17805,6 +18079,8 @@ async function runBuiltin(ctx, words, flags) {
       return runWait(ctx, flags);
     case "task":
       return runTask(ctx, sub, flags);
+    case "gen":
+      return runGen(ctx, sub, flags);
     case "agent":
       return runAgentBuiltin(ctx, sub, flags, words[2]);
     case "commands": {

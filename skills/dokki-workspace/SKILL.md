@@ -69,8 +69,8 @@ Icons: 📄 document, 📊 table, 🎨 artifact, 📁 folder
 - IDs shown to the user should be short (8-char prefix) — full UUIDs are visually noisy
 - If the user has many workspaces (>5), don't dump the full tree of all of them; ask which one
 - `find {action:"workspaces"}` is scoped by the current MCP connection. If an expected Org or
-  workspace is missing, tell the user to reconnect OAuth and select that scope, or use the
-  correct Org-scoped API key. Do not ask them to change the server URL to an Org-specific endpoint.
+  workspace is missing, tell the user to reconnect and select that scope on Dokki's consent screen.
+  Do not ask them to change the server URL to an Org-specific endpoint.
 
 ---
 
