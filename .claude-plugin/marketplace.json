@@ -12,7 +12,11 @@
   "plugins": [
     {
       "name": "dokki",
-      "source": "./",
+      "source": {
+        "source": "github",
+        "repo": "Dokki-lab/dokki-plugin",
+        "ref": "claude-code"
+      },
       "description": "Work in your Dokki workspaces from Claude Code: search shared knowledge, create and edit documents, tables, artifacts, Apps and Automations, and publish. Claude Code can also join your Dokki team as an agent people @mention.",
       "strict": true
     }

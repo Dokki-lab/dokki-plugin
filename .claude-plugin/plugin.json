@@ -1,8 +1,8 @@
 {
   "name": "dokki",
   "displayName": "Dokki",
-  "description": "Work in your Dokki workspaces from Claude Code: search shared knowledge, create and edit documents, tables, artifacts, Apps and Automations, and publish. Claude Code can also join your Dokki team as an agent people @mention.",
-  "version": "1.6.0",
+  "description": "Work in your Dokki workspaces: search shared knowledge, create and edit documents, tables, artifacts, Apps and Automations, and publish.",
+  "version": "1.6.1",
   "author": {
     "name": "Dokki",
     "url": "https://dokki.one"
